@@ -1,0 +1,43 @@
+{
+  "cik": "0001000052",
+  "entityName": "Example Prelisting Corp",
+  "facts": {
+    "us-gaap": {
+      "Revenues": {
+        "label": "",
+        "description": "",
+        "units": {
+          "USD": [
+            {
+              "start": "2025-01-01",
+              "end": "2025-12-31",
+              "val": 64000000,
+              "accn": "0000320193-19-000119",
+              "fy": null,
+              "fp": null,
+              "form": "S-1/A",
+              "filed": "2026-03-10"
+            }
+          ]
+        }
+      },
+      "Assets": {
+        "label": "",
+        "description": "",
+        "units": {
+          "USD": [
+            {
+              "end": "2025-12-31",
+              "val": 210000000,
+              "accn": "0000320193-19-000119",
+              "fy": null,
+              "fp": null,
+              "form": "S-1/A",
+              "filed": "2026-03-10"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

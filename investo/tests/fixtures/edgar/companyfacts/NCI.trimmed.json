@@ -1,0 +1,150 @@
+{
+  "cik": "0001000049",
+  "entityName": "Example Consolidated Group",
+  "facts": {
+    "us-gaap": {
+      "Revenues": {
+        "label": "",
+        "description": "",
+        "units": {
+          "USD": [
+            {
+              "start": "2023-01-01",
+              "end": "2023-12-31",
+              "val": 7400000000,
+              "accn": "0000320193-19-000119",
+              "fy": 2023,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2024-02-21"
+            },
+            {
+              "start": "2024-01-01",
+              "end": "2024-12-31",
+              "val": 7900000000,
+              "accn": "0000320193-19-000119",
+              "fy": 2024,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2025-02-19"
+            }
+          ]
+        }
+      },
+      "Assets": {
+        "label": "",
+        "description": "",
+        "units": {
+          "USD": [
+            {
+              "end": "2023-12-31",
+              "val": 10000000000,
+              "accn": "0000320193-19-000119",
+              "fy": 2023,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2024-02-21"
+            },
+            {
+              "end": "2024-12-31",
+              "val": 11000000000,
+              "accn": "0000320193-19-000119",
+              "fy": 2024,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2025-02-19"
+            }
+          ]
+        }
+      },
+      "LiabilitiesAndStockholdersEquity": {
+        "label": "",
+        "description": "",
+        "units": {
+          "USD": [
+            {
+              "end": "2023-12-31",
+              "val": 10000000000,
+              "accn": "0000320193-19-000119",
+              "fy": 2023,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2024-02-21"
+            },
+            {
+              "end": "2024-12-31",
+              "val": 11000000000,
+              "accn": "0000320193-19-000119",
+              "fy": 2024,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2025-02-19"
+            }
+          ]
+        }
+      },
+      "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest": {
+        "label": "",
+        "description": "",
+        "units": {
+          "USD": [
+            {
+              "end": "2023-12-31",
+              "val": 4000000000,
+              "accn": "0000320193-19-000119",
+              "fy": 2023,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2024-02-21"
+            }
+          ]
+        }
+      },
+      "StockholdersEquity": {
+        "label": "",
+        "description": "",
+        "units": {
+          "USD": [
+            {
+              "end": "2023-12-31",
+              "val": 3400000000,
+              "accn": "0000320193-19-000119",
+              "fy": 2023,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2024-02-21"
+            },
+            {
+              "end": "2024-12-31",
+              "val": 3800000000,
+              "accn": "0000320193-19-000119",
+              "fy": 2024,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2025-02-19"
+            }
+          ]
+        }
+      }
+    },
+    "dei": {
+      "EntityCommonStockSharesOutstanding": {
+        "label": "",
+        "description": "",
+        "units": {
+          "shares": [
+            {
+              "end": "2025-02-03",
+              "val": 305000000,
+              "accn": "0000320193-19-000119",
+              "fy": 2019,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2019-10-31"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -85,9 +85,50 @@ is the one timestamp ``prune`` needs. Everything else under ``ingest/`` receives
 ``SourceContext``.
 """
 
+USGAAP_LITERAL_ALLOWED: Final = {
+    "normalize/tags.py": "the chain registry: the single home for every us-gaap tag",
+}
+"""M2 widens M1's ``ingest/`` rule to the **whole package**, with a one-key allowlist.
+
+M1 argued it for ``ingest/`` on the grounds that a tag literal there *"is the first line of a second,
+shadow copy of ``normalize/tags.py``."* The argument is stronger for ``report/`` and ``analyze/``,
+because those have a plausible reason to want one — a chart label, a hardcoded fallback for a metric
+that came back empty — and the disagreement it produces is between the number and its own provenance
+line.
+"""
+
+_M2_TREES: Final = ("normalize/", "report/")
+"""The trees M2 adds, and the scope of five of its six new rules."""
+
+COMMAND_CLOCK_READ_ALLOWED: Final = {
+    "cli.py": "`--as-of` is rejected as future against today, and `cache prune` needs a now",
+    "fetch.py": "`run_fetch` defaults `as_of` to today when the caller passed none",
+    "facts.py": "`run_facts` does the same, once, before threading the result down",
+}
+"""Modules **outside** ``ingest/`` that may read a clock, and why. Pinned, because the list grows.
+
+``docs/m2/README.md`` §3 said *"``cli.py`` and ``fetch.py`` are the only modules permitted to"* — true
+when it was written and false the moment M2 added a third command body. An enumeration in prose that
+needs editing every milestone is the thing that just went stale; an enumeration in a test fails the
+build instead, which is the difference between a rule and a description.
+
+The **rule** is unchanged and is what the entries above have to satisfy: the clock is read at a command
+boundary, once, and the resolved date is threaded down. Every entry here is a command body. Nothing
+under ``normalize/`` or ``report/`` may read one at all —
+:func:`test_no_clock_read_in_normalize_or_report`, with an empty allowlist.
+"""
+
 _CLOCK_ATTRS: Final = frozenset({"now", "today", "utcnow"})
 _CLOCK_OWNERS: Final = frozenset({"datetime", "date"})
 _DOMAIN_FORBIDDEN: Final = {"httpx", "urllib", "socket", "requests", "sqlite3", "pathlib"}
+_NORMALIZE_FORBIDDEN: Final = _DOMAIN_FORBIDDEN - {"pathlib"}
+"""``docs/m2/05-testing.md`` §4 lists five imports, not ``domain/``'s six.
+
+``pathlib`` is deliberately absent: nothing under ``normalize/`` or ``report/`` writes a file today —
+``serialize`` returns a string and the command owns the path — but M3's renderer will legitimately need
+to read a template from disk, and a rule that has to be relaxed in the milestone after the one that
+added it was never the rule.
+"""
 
 
 # ---------------------------------------------------------------------------
@@ -188,6 +229,43 @@ def _imported_modules(rel: str, tree: ast.Module) -> set[str]:
             base = ".".join(parts)
             found.add(base)
             found.update(f"{base}.{alias.name}" for alias in node.names)
+    return found
+
+
+def _sorts_without_a_key(tree: ast.Module) -> list[str]:
+    """Every ``sorted(...)`` or ``.sort()`` call with no ``key=`` argument.
+
+    A ``min``/``max`` over facts has the same defect, so those are checked too: all four reduce a
+    sequence through ``FiscalPeriod``'s partial order if handed one bare.
+    """
+    found: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        function = node.func
+        if isinstance(function, ast.Name) and function.id in {"sorted", "min", "max"}:
+            name = function.id
+        elif isinstance(function, ast.Attribute) and function.attr == "sort":
+            name = ".sort"
+        else:
+            continue
+        if not any(keyword.arg == "key" for keyword in node.keywords):
+            found.append(f"{name}() at line {node.lineno}")
+    return found
+
+
+def _float_constructions(tree: ast.Module) -> list[str]:
+    """``float(...)`` calls and float literals — CLAUDE.md convention 8, checked structurally."""
+    found: list[str] = []
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "float"
+        ):
+            found.append(f"float() at line {node.lineno}")
+        elif isinstance(node, ast.Constant) and isinstance(node.value, float):
+            found.append(f"float literal {node.value!r} at line {node.lineno}")
     return found
 
 
@@ -432,6 +510,215 @@ def test_the_clock_read_allowlist_holds_no_parser() -> None:
         "ingest/prices/tiingo.py",
         "ingest/prices/yfinance_.py",
     }
+
+
+# ---------------------------------------------------------------------------
+# The M2/M3 seam — six rules over `normalize/` and `report/`
+# ---------------------------------------------------------------------------
+def _m2_modules() -> tuple[tuple[str, ast.Module], ...]:
+    return tuple((rel, tree) for rel, tree in MODULES if rel.startswith(_M2_TREES))
+
+
+@pytest.mark.spec
+def test_m2_trees_exist_to_be_checked() -> None:
+    """Guard the five rules below: each iterates a tree, and an empty tree passes vacuously.
+
+    The same argument as ``test_every_module_in_the_package_was_parsed``, one layer down. If
+    ``normalize/`` were renamed, every rule in this section would go green while enforcing nothing —
+    which is the failure mode an AST test is supposed to be immune to.
+    """
+    names = {rel for rel, _ in _m2_modules()}
+    for expected in (
+        "normalize/tags.py",
+        "normalize/facts.py",
+        "normalize/statements.py",
+        "report/serialize.py",
+    ):
+        assert expected in names, f"{expected} not found among {sorted(names)}"
+
+
+@pytest.mark.spec
+def test_usgaap_literal_only_in_tags() -> None:
+    """``normalize/tags.py`` is the **only** module in the package that may name a ``us-gaap`` tag.
+
+    The failure this prevents is two tag tables. A hardcoded fallback in ``report/`` for a metric that
+    came back empty produces a number whose provenance line names a different tag than the one that
+    produced it — the report disagreeing with its own appendix, which is the one failure mode this
+    project's first stated property exists to rule out.
+    """
+    offenders = {
+        rel
+        for rel, tree in MODULES
+        if any("us-gaap" in text.lower() for text in _value_literals(tree))
+    }
+    unexpected = offenders - set(USGAAP_LITERAL_ALLOWED)
+    assert not unexpected, f"us-gaap literal outside the registry: {sorted(unexpected)}"
+
+
+@pytest.mark.spec
+def test_the_usgaap_allowlist_holds_only_the_registry() -> None:
+    """One key, pinned. A second entry is where a shadow tag table starts."""
+    assert set(USGAAP_LITERAL_ALLOWED) == {"normalize/tags.py"}
+
+
+@pytest.mark.spec
+def test_the_registry_actually_holds_the_tags() -> None:
+    """The converse, and it is not redundant.
+
+    Moving the chains into a data file or a dict comprehension over strings assembled elsewhere would
+    satisfy the rule above perfectly. This fails if the registry stops being the registry — the same
+    shape as ``test_client_actually_holds_the_hosts``.
+    """
+    trees = dict(MODULES)
+    literals = _value_literals(trees["normalize/tags.py"])
+    assert "us-gaap" in literals, "the registry no longer names its taxonomy"
+    assert sum(1 for text in literals if text.startswith("Revenue")) >= 2
+
+
+@pytest.mark.spec
+def test_no_clock_read_in_normalize_or_report() -> None:
+    """Nothing under ``normalize/`` or ``report/`` reads a clock. **Empty allowlist**, unlike ``ingest/``'s.
+
+    ``as_of`` is resolved at the command boundary and threaded down. A ``date.today()`` in the pipeline
+    makes two runs either side of midnight differ, and DESIGN.md §11 would report that as
+    nondeterminism rather than as the design mistake it is — the worst kind of bug report, because it
+    sends the reader looking at the serializer.
+    """
+    for rel, tree in _m2_modules():
+        reads = sorted(set(_clock_reads(tree)))
+        assert not reads, f"{rel} reads the clock: {reads}"
+
+
+@pytest.mark.spec
+def test_only_a_command_body_reads_a_clock() -> None:
+    """The other half of the clock rule: *which* modules outside ``ingest/`` are allowed one.
+
+    ``test_no_clock_read_in_normalize_or_report`` forbids it in the two trees the pipeline lives in,
+    which is the rule that matters for determinism. This one pins the positive list, because the
+    failure it catches is different: a clock read arriving in a *new* module — M3's ``analyze.py`` is
+    the next candidate — that is neither under ``normalize/`` nor obviously a command boundary. That
+    would pass every other rule in this file and would put a second, later `as_of` into a run that had
+    already resolved one.
+    """
+    offenders = {
+        rel
+        for rel, tree in MODULES
+        if not rel.startswith("ingest/") and not rel.startswith(_M2_TREES) and _clock_reads(tree)
+    }
+    assert offenders == set(COMMAND_CLOCK_READ_ALLOWED), (
+        f"the set of clock-reading command bodies moved: {sorted(offenders)}"
+    )
+
+
+@pytest.mark.spec
+def test_every_clock_reading_module_is_a_command_body() -> None:
+    """Each exemption is a command body, not a helper that grew one.
+
+    Pinned as a key set for the reason the ``sec.gov`` allowlist is: the cheapest way to make the test
+    above pass is to add the offending module, and that repair should be a visible edit to a set that
+    says why each member is in it.
+    """
+    assert set(COMMAND_CLOCK_READ_ALLOWED) == {"cli.py", "fetch.py", "facts.py"}
+    names = {rel for rel, _ in MODULES}
+    for rel in COMMAND_CLOCK_READ_ALLOWED:
+        assert rel in names, f"{rel} no longer exists"
+        assert "/" not in rel, "a command body sits at the package root, next to cli.py"
+
+
+@pytest.mark.spec
+def test_normalize_imports_no_io() -> None:
+    """A normalization layer that *can* fetch is one that will, and then the warm-run guarantee is gone."""
+    for rel, tree in _m2_modules():
+        roots = {name.split(".")[0] for name in _imported_modules(rel, tree)}
+        offending = roots & _NORMALIZE_FORBIDDEN
+        assert not offending, f"{rel} imports {sorted(offending)}"
+
+
+@pytest.mark.spec
+def test_normalize_does_not_import_downstream_layers() -> None:
+    """DESIGN.md §3's flow is one-directional.
+
+    ``report/serialize.py`` importing ``normalize`` is correct; the reverse is not. An upward import is
+    how a coverage report acquires an opinion about page layout.
+    """
+    for rel, tree in MODULES:
+        if not rel.startswith("normalize/"):
+            continue
+        imported = _imported_modules(rel, tree)
+        upward = {
+            name
+            for name in imported
+            if name.startswith(("investo.report", "investo.analyze", "investo.backtest"))
+        }
+        assert not upward, f"{rel} imports {sorted(upward)}"
+
+
+@pytest.mark.spec
+def test_every_sort_names_a_key() -> None:
+    """No sort under ``normalize/`` or ``report/`` may use a partial key.
+
+    ``FiscalPeriod`` compares on ``(end, kind)`` with ``start`` excluded, so two durations with the same
+    end and kind compare **equal** — and Python's stable sort then returns input order for the tie,
+    where input order descends from ``dict`` iteration over a parsed JSON payload. Deterministic today,
+    not a guarantee, and invisible when wrong.
+
+    An AST rule rather than a convention for exactly that reason: the failure it prevents does not show
+    up in any run that happens to agree.
+    """
+    for rel, tree in _m2_modules():
+        offenders = _sorts_without_a_key(tree)
+        assert not offenders, f"{rel} sorts without a key: {offenders}"
+
+
+@pytest.mark.spec
+def test_no_float_in_normalize_or_report() -> None:
+    """CLAUDE.md convention 8, at the layer where the temptation appears.
+
+    A fill rate looks like a ``float`` and ``json.dumps`` accepts one. The AST check covers the
+    ``float(value)`` route; ``test_serialize::test_values_are_quoted_in_the_raw_text`` covers the other
+    one, a ``JSONEncoder`` that passes a ``Decimal`` through unquoted.
+    """
+    for rel, tree in _m2_modules():
+        offenders = _float_constructions(tree)
+        assert not offenders, f"{rel} constructs a float: {offenders}"
+
+
+@pytest.mark.spec
+def test_the_sort_and_float_detectors_actually_detect() -> None:
+    """Guard the two new detectors against their own false negatives.
+
+    Both are new AST predicates rather than reuses of an existing one, so each gets the treatment
+    ``test_concatenated_and_interpolated_literals_are_caught`` gives the literal walker: a snippet that
+    must trip it, parsed from source so the test names its own input.
+    """
+    tree = ast.parse(
+        "a = sorted(xs)\n"
+        "b = sorted(xs, key=f)\n"
+        "xs.sort()\n"
+        "c = max(xs)\n"
+        "d = float(x)\n"
+        "e = 0.5\n"
+        "g = Decimal('0.5')\n"
+    )
+    sorts = _sorts_without_a_key(tree)
+    assert len(sorts) == 3, sorts
+    floats = _float_constructions(tree)
+    assert len(floats) == 2, floats
+
+
+@pytest.mark.spec
+def test_metric_still_unreferenced_in_ingest_after_m2_exists() -> None:
+    """The M1/M2 seam, checked now that the other side of it is built.
+
+    ``test_metric_unreferenced_in_ingest`` passed in M1 when no consumer of ``Metric`` existed at all,
+    which is a weaker fact than it looks. This asserts the same rule holds with ``normalize/`` present
+    and importing ``Metric`` freely — and that the layer which *is* allowed to name it does.
+    """
+    trees = dict(MODULES)
+    assert "Metric" in _bound_names(trees["normalize/tags.py"])
+    for rel, tree in MODULES:
+        if rel.startswith("ingest/"):
+            assert "Metric" not in _bound_names(tree), f"{rel} references Metric"
 
 
 @pytest.mark.spec

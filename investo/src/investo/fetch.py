@@ -72,6 +72,25 @@ class FetchResult:
     """Everything one ``fetch`` run learned. Rendered by :func:`render_summary`."""
 
     ticker: str
+    cik: int | None = None
+    """The resolved CIK, from the ticker row. **[M2]**
+
+    Added in M2 — the one change that milestone makes to an M1 file. ``facts`` calls ``build_history``
+    with the company's identity, and ``profile`` is ``None`` whenever the submissions payload 404s, so
+    the identity has to come from somewhere that survives that. ``_resolve_ticker`` already holds the
+    ``TickerRow`` and used to let it fall out of scope; the alternatives — re-reading the 1 MB ticker
+    file, or a second resolution path — are both things ``docs/m1/`` rejected.
+
+    Optional to match this dataclass's incremental-fill style, and non-``None`` by the time
+    :func:`run_fetch` returns, because ``_resolve_ticker`` raises exit 2 on the path that would leave
+    it unset.
+    """
+    name: str | None = None
+    """The mixed-case company name from ``company_tickers_exchange.json``. **[M2]**
+
+    Not from ``companyfacts.entityName``, which is EDGAR-conformed uppercase. When ``profile`` is
+    present its name wins; M1's rule is about ``entityName``, and the ticker file is not that.
+    """
     profile: submissions_parser.CompanyProfile | None = None
     sources: list[SourceStatus] = field(default_factory=list)
     absent: list[str] = field(default_factory=list)
@@ -173,7 +192,12 @@ def _resolve_ticker(
         response.body, source=SourceContext(url=url, fetched_at=response.fetched_at)
     )
     # Raises TickerNotFoundError (exit 2) for both "absent" and "present but not NASDAQ".
-    return tickers_parser.resolve(rows, result.ticker), rows
+    row = tickers_parser.resolve(rows, result.ticker)
+    # Recorded rather than discarded (M2): `facts` needs the company's identity even when the
+    # submissions payload 404s, and this is the only place that already has it.
+    result.cik = row.cik
+    result.name = row.name
+    return row, rows
 
 
 def _fetch_submissions(

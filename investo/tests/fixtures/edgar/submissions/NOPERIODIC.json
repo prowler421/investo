@@ -1,0 +1,110 @@
+{
+  "cik": "0001000052",
+  "entityType": "operating",
+  "sic": "7372",
+  "sicDescription": "Services-Prepackaged Software",
+  "name": "Example Prelisting Corp",
+  "tickers": [
+    "EXNP"
+  ],
+  "exchanges": [
+    "Nasdaq"
+  ],
+  "fiscalYearEnd": "1231",
+  "stateOfIncorporation": "DE",
+  "addresses": {
+    "business": {
+      "street1": "1 Example Way",
+      "city": "Austin",
+      "stateOrCountry": "TX"
+    }
+  },
+  "phone": "(512) 555-0100",
+  "flags": "",
+  "formerNames": [],
+  "filings": {
+    "recent": {
+      "accessionNumber": [
+        "0001193125-26-100001",
+        "9999999997-26-000501",
+        "0001193125-26-100777"
+      ],
+      "filingDate": [
+        "2026-03-10",
+        "2026-03-24",
+        "2026-04-02"
+      ],
+      "reportDate": [
+        "",
+        "",
+        "2026-04-01"
+      ],
+      "acceptanceDateTime": [
+        "2026-03-10T16:02:11.000Z",
+        "2026-03-24T00:04:02.000Z",
+        "2026-04-02T13:11:45.000Z"
+      ],
+      "act": [
+        "33",
+        "",
+        "34"
+      ],
+      "form": [
+        "S-1/A",
+        "EFFECT",
+        "8-K"
+      ],
+      "fileNumber": [
+        "333-290001",
+        "333-290001",
+        "001-42999"
+      ],
+      "filmNumber": [
+        "26700001",
+        "",
+        "26710777"
+      ],
+      "items": [
+        "",
+        ",,",
+        "5.02"
+      ],
+      "core_type": [
+        "S-1/A",
+        "EFFECT",
+        "8-K"
+      ],
+      "size": [
+        5512403,
+        1041,
+        41220
+      ],
+      "isXBRL": [
+        1,
+        0,
+        1
+      ],
+      "isInlineXBRL": [
+        1,
+        0,
+        1
+      ],
+      "isXBRLNumeric": [
+        1,
+        null,
+        0
+      ],
+      "primaryDocument": [
+        "d900001ds1a.htm",
+        "",
+        "exnp-20260401.htm"
+      ],
+      "primaryDocDescription": [
+        "S-1/A",
+        "",
+        "8-K"
+      ]
+    },
+    "files": []
+  }
+}

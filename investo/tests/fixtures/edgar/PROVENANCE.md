@@ -24,8 +24,8 @@ What that means concretely:
   mixed-case `"Nasdaq"`, the `",,"` items value, the `xslF345X06/` prefix and `"files":[]` are all
   reproduced exactly as `docs/m1/04-parsers.md` records them from live payloads. Where the design
   quotes a payload verbatim, this directory reproduces those bytes.
-- The **content** is invented. The numbers are not Apple's revenue. `EXBK`, `EXPT`, `EXNC`, `EXRS`
-  and `EXNQ` are not real tickers.
+- The **content** is invented. The numbers are not Apple's revenue. `EXBK`, `EXPT`, `EXNC`, `EXRS`,
+  `EXNQ`, and M2's `EXYT`, `EXT2`, `EXNI`, `EXSY`, `EXBU` and `EXNP` are not real tickers.
 - So these fixtures test that **the parsers handle the traps**. They cannot test that **the traps
   are real** — that claim rests on `docs/m1/04-parsers.md`'s live observations for ARXS, and on
   nothing at all for the other five.
@@ -108,6 +108,22 @@ document's instruction.
 | `RESTATER.trimmed.json` | **yes** | One period (`2020-01-01`..`2020-12-31`) at **four `filed` dates with four different values**: 812.0M → 806.5M → 791.2M → 774.9M. This is what `--as-of` has to cut. | `Revenues.units.USD`. `--as-of 2021-06-30` must yield 812,000,000. |
 | `NOQ4.trimmed.json` | **yes** | Discrete Q4 never tagged — **and inconsistently, within one issuer, across years**, which §4.2(c) says is the real behaviour. FY2022 has Q1–Q3 plus an annual figure; FY2023 has all four. | `Revenues.units.USD`. A rule that always subtracts double-counts FY2023, which is why uniform absence would be the wrong fixture. |
 
+### M2's six additions
+
+Each closes a gap the M1 set cannot exercise. The gaps were **established by parsing every payload in
+this directory**, not assumed: no fact anywhere had a duration in 101–349 days or outside 80–380, no
+tier-2 tag appeared in any file, neither NCI tag appeared, and the only units present were `USD`,
+`USD/shares`, `shares` and `pure`.
+
+| Fixture | Synthetic | Trap it carries | Where to look |
+|---|---|---|---|
+| `YTDONLY.trimmed.json` | **yes** | **No M1 fixture contained a YTD fact at all**, so `docs/m2/02-facts.md` §7 was unfalsifiable — a differencing implementation that never fires passed every test. CY2023 is filed cumulatively: 3M 100, H1 210, 9M 330, FY 460, with no discrete Q2 or Q3. CY2024 files Q1, H1 **and** a discrete Q2, so the H1 fact is redundant. | `Revenues.units.USD`. Q2 must come out 110 and Q3 120, each over two refs. **Q4 must stay absent**: the only quarters left to subtract are the two derived ones, and nothing is derived from a derived part — a test expecting 130 here would be asserting that rule had been broken. |
+| `TIER2.trimmed.json` | **yes** | Every tier-2 concept — **none appeared anywhere before**, so half of ROADMAP M2's exit criterion was untested by anything. Plus three traps on three different metrics, because one metric can only have one shape: revenue **partitions** across the assessed-tax pair (a permanent switch, to be stitched and dated), long-term debt **interleaves** across the debt/lease pair (noise, to be collapsed to the majority), and SG&A splits mid-history into `GeneralAndAdministrative` + `SellingAndMarketing`. | `RevenueFromContractWithCustomer…` for the switch; `LongTermDebt` versus `LongTermDebtAndCapitalLeaseObligations` for the interleave. **A stitch-everything implementation passes the first and fails the second**, which is why both are here. `GrossProfit` covers FY2021–23 only, so the `revenue − cogs` derivation has exactly one period to fire on. Net income is `ProfitLoss` only, giving the scope-mismatch finding a target with no group conflict attached. |
+| `NCI.trimmed.json` | **yes** | `Liabilities` absent — the ~11% of filers §4.2 says never tag it, which is the population that reaches the derivation. 2023 carries `LiabilitiesAndStockholdersEquity` 10,000, equity **including** NCI 4,000 and equity parent-only 3,400. | The correct answer is 6,000 and the tempting one is 6,600. Both equity tags are present on purpose: the only assertion that distinguishes the right derivation from the wrong one is that they differ by **exactly** the 600 NCI. 2024 drops the including-NCI tag, so the parent-only fallback fires and must be recorded as `liabilities_nci_approximated`. |
+| `STUBYEAR.trimmed.json` | **yes** | A fiscal-year change: `2022-01-01`..`2022-03-01` is 60 days → `OTHER`, dropped and **counted**; `2022-03-02`..`2023-03-07` is 371 days → `ANNUAL`, kept. | `Revenues.units.USD`. The 371-day year is the boundary a reader assumes the narrow band breaks. **The stub is 60 days, not the 140 `docs/m2/05-testing.md` §2 suggests** — 140 falls in `PeriodKind.YTD`'s 101–349 band, so a 140-day stub would exercise the YTD disposition rather than the `OTHER` one. A fixture that silently tests a different rule than its name is worse than no fixture. |
+| `BADUNIT.trimmed.json` | **yes** | `EarningsPerShareDiluted` under **`USD`** (§4.2 says it arrives under `USD/shares`; a resolver ignoring unit reports an EPS three orders of magnitude off) and a revenue fact under **`EUR`** (§12's out-of-scope reporting currency). | FY2023 carries the correct spelling of both and FY2024 the wrong ones, so the assertion is that the wrong-unit facts are excluded **and counted** while the right ones survive — not merely that the metric is absent, which would pass for a resolver that dropped everything. |
+| `NOPERIODIC.trimmed.json` | **yes** | **No M1 fixture produced an `OBSERVED` spine.** `ARXS` was the obvious candidate and turns out to have a 10-Q, so its origin is `FILINGS` with an empty annual bucket. This has facts, so a numerator exists, and its paired submissions payload has no `10-K` or `10-Q`, so the filing history supplies no denominator. | `Revenues` and `Assets`, both filed on an `S-1/A`. Pair with `submissions/NOPERIODIC.json`; either half alone leaves the branch untested. |
+
 ## tickers
 
 | Fixture | Synthetic | Trap | Where to look |
@@ -121,6 +137,7 @@ document's instruction.
 | `ARXS.json` | **shape live, rows invented** | The complete-small-filer payload. Every awkward value observed live: `"cik":"0002093536"` as a padded string, `"sic":"3728"` as a string, `reportDate` and `act` as `""`, `isXBRLNumeric` carrying real `null`s **mixed with `0`/`1` in one array**, an `items` value of literally `",,"`, `primaryDocument` of `"xslF345X06/ownership.xml"`, a `.pdf` primary document, and `"files":[]`. Committed whole and untrimmed, which is what makes it the fixture that catches a normalization bug a reduction script might have smoothed over. |
 | `AAPL.json` | **yes, and `files[]` is unconfirmed** | Main payload with a **populated `files[]`** — the pagination case. Confirmed real that Apple's overflow page 001 holds 2015 filings, so `filings.recent` does not reach 2015. Also carries an Item **4.02** 8-K so the events extractor has a real target. **The field names inside the `files[]` entry are SEC's prose, not an observation** — see the blocking task above. |
 | `AAPL-submissions-001.json` | **yes** | An overflow page: **flat** columnar, no `filings` wrapper, no company metadata. Its first key is `accessionNumber`, exactly as the observed page begins. Exercises the second parse function, and the test that each parser *rejects* the other's shape. |
+| `NOPERIODIC.json` | **yes** | **A filing history with no periodic report of either kind** — `S-1/A`, `EFFECT`, `8-K`. Paired with `companyfacts/NOPERIODIC.trimmed.json` it is the only route to a labelled `OBSERVED` coverage denominator. `sic` is populated deliberately, so the finding under test is `spine_observed` alone rather than that plus `submissions_absent`. |
 
 ## malformed
 
@@ -168,7 +185,13 @@ what changes across releases.
    design, and §7.4 says to collect failures as fixtures rather than chase generality. Collection has
    not started, so the current tests exercise the splitter against constructed text only. The parse
    rate is reported precisely so this gap is measured rather than assumed.
-5. **`parse_float=Decimal`'s cost is unmeasured here.** `04-parsers.md` reports 1.12× on a 33 MB
+5. **M2's six additions are synthetic too, so DESIGN.md §11's "assert exact expected series" stays
+   self-referential.** Asserting that `TIER2`'s FY2024 gross profit is 1,924,000,000 against a payload
+   that says so because the generator was told to say so tests the generator. `docs/m2/05-testing.md`
+   §2 is explicit about this, and it is why the M2 suite asserts **derivations** — that `NOQ4`'s FY2023
+   yields four quarters and not five, that the NCI-aware liabilities figure differs from the tempting
+   one by exactly the NCI — which survives the synthetic set intact where a value assertion does not.
+6. **`parse_float=Decimal`'s cost is unmeasured here.** `04-parsers.md` reports 1.12× on a 33 MB
    synthetic payload measured on CPython 3.10; that has not been re-measured on 3.13 or against a real
    40 MB payload. The structural reason it is cheap — the C scanner is retained and the callable fires
    only on numbers with a decimal point — means the conclusion is unlikely to move.

@@ -1,8 +1,18 @@
 # M2 — Normalization
 
-Status: **designed; all seventeen spec questions accepted on review (2026-07-31) and folded into
-DESIGN.md and ROADMAP.md.** Implementation not started.
-Last updated: 2026-07-31
+Status: **built.** All seventeen spec questions were accepted on review (2026-07-31) and folded into
+DESIGN.md and ROADMAP.md; the code landed 2026-08-01. `normalize/tags.py`, `normalize/facts.py`,
+`normalize/statements.py`, `report/serialize.py` and the `facts` command all exist, with the six new
+synthetic fixtures, the six new layering rules, and ~390 tests.
+
+**Two of the ten workstreams in [§ 9](#9-sizing) are research and are still open**, exactly as that
+section warned they would be: the carried-over fixture curation and the twenty-name coverage
+measurement. Both are recorded rather than assumed — see
+[§ 11 What landed, and what did not](#11-what-landed-and-what-did-not). Until the measurement exists,
+the tier-2 chain orderings in the registry are **provisional** and DESIGN §4.2 deliberately does not
+carry them.
+
+Last updated: 2026-08-01
 
 Design for ROADMAP M2, the phase ROADMAP marks ⚠️ *hardest*. `DESIGN.md` and `ROADMAP.md` remain
 normative; this document is subordinate to both, and to the M1 design in
@@ -118,11 +128,19 @@ print(serialize(history, run=...) if json_ else render_facts(history))
 
 Three things that snippet is making explicit rather than eliding:
 
-- **`date.today()` is called at the command and nowhere below it.** `cli.py` and `fetch.py` are the
-  only modules permitted to; `normalize/` and `report/` are forbidden by an AST rule
-  ([`05-testing.md` § 4](05-testing.md#4-new-layering-rules)). A default resolved deeper makes two
-  runs either side of midnight differ, which §11 reports as nondeterminism rather than as the
-  design mistake it is.
+- **`date.today()` is called at a command boundary, once, and nowhere below it.** `normalize/` and
+  `report/` are forbidden by an AST rule ([`05-testing.md` § 4](05-testing.md#4-new-layering-rules)).
+  A default resolved deeper makes two runs either side of midnight differ, which §11 reports as
+  nondeterminism rather than as the design mistake it is.
+
+  **This bullet said "`cli.py` and `fetch.py` are the only modules permitted to", and on
+  implementation that became false**: the resolution lives in `run_facts`, in the new `facts.py`,
+  exactly where `run_fetch` puts it for `fetch` — the command body, not `cli.py`, which stays the
+  declared flag surface. The enumeration was accurate when written and stale one milestone later,
+  and M3's `analyze.py` would have staled it again. So it is now a **test** rather than a sentence:
+  `test_layering::test_only_a_command_body_reads_a_clock` pins the set of clock-reading modules
+  outside `ingest/`, and its companion asserts each one is a command body. A list in prose that needs
+  editing every milestone is a description; a list in a test is a rule.
 - **`facts` and `profile` are passed as the `| None` they are.** Both have live absence paths in
   M1 (`fetch.py:191` and `:253`), both are documented as exit-0 outcomes in
   [§ 4](#4-exit-codes), and a non-optional `build_history` would neither type-check nor survive the
@@ -615,11 +633,11 @@ below.
 **`src/investo/fetch.py`** — the only M1 *code* file M2 touches, and the only code change
 identified before implementation:
 
-- ⏳ `FetchResult` gains `cik: int | None` and `name: str | None`, set in `_resolve_ticker`
-  (`fetch.py:135`), which holds the `TickerRow` today and discards it. Lands with the
-  implementation, not now. Without it the company's identity does not survive a submissions 404,
-  and the alternatives — re-reading the ticker file, or a second resolution path — are both things
-  `docs/m1/` already rejected.
+- ✅³ `FetchResult` gained `cik: int | None` and `name: str | None`, set in `_resolve_ticker`, which
+  held the `TickerRow` and discarded it. Without it the company's identity does not survive a
+  submissions 404, and the alternatives — re-reading the ticker file, or a second resolution path —
+  are both things `docs/m1/` already rejected. **It is still the only M1 code file M2 touched**, which
+  is the claim this section exists to make checkable.
 
 **CLAUDE.md**
 
@@ -630,3 +648,52 @@ identified before implementation:
   `report/`, the `us-gaap` literal allowlist, total sort keys, and no clock read. The old 9
   (determinism) renumbered to 12 and notes `report.json` is already under the gate.
 - ✅ § Review checklist gains the four M2 rules as one line.
+- ✅³ On implementation: the status line and § Current layout again, the two open research
+  workstreams and what they gate, and a sentence on convention 10's `key=identity` idiom — which a
+  contributor meets on their first sort under `normalize/` and would otherwise read as noise.
+
+---
+
+## 11. What landed, and what did not
+
+Written on implementation (2026-08-01), because [§ 2](#2-considered-and-rejected-an-m2am2b-split)
+predicted exactly one way this milestone could look finished without being finished, and the honest
+form of that prediction is a list.
+
+**Landed as designed.** Period-wise resolution with the ASC 606 stitch; exclusivity groups with
+partition-versus-interleave; aggregation class and `subtractable`; per-chain units and sign
+conventions; the SG&A summing member (one, asserted); the three cross-metric derivations including
+the NCI-aware liabilities fallback; `as_of` before dedup; the five-part dedup key with the
+restatement record; the `OTHER`/YTD disposition; residual recovery with its guards; the period spine
+with its four construction rules and the ±3-day one-to-one match; per-metric coverage with tier
+aggregates; the eighteen findings; `report.json` with interned sources and quoted `Decimal`s; the
+`facts` command with `--json`; six fixtures; six layering rules.
+
+**Three divergences from this document, each recorded where it matters rather than only here.**
+
+| Divergence | Why | Where it is recorded |
+|---|---|---|
+| `STUBYEAR`'s stub is **60 days, not 140** | 140 days falls in `PeriodKind.YTD`'s 101–349 band, so a 140-day stub exercises the *YTD* disposition rather than the `OTHER` one this fixture exists for. `OTHER` is under 80 days or over 380. | `PROVENANCE.md`, and the fixture's own docstring |
+| `MetricCoverage` gains `spine_date_inexact`, `dropped_ytd_redundant` and `dropped_ytd_unusable` | [`03-statements.md`](03-statements.md) and [`02-facts.md`](02-facts.md) both require counts *"in the coverage report"* that its field list had no field for. The third exists because a YTD fact whose ladder has a hole is not redundant, and a fact in no bucket and no counter is one the coverage report cannot mention. | the field docstrings, marked `[extends §3.2's field list]` |
+| `q4_absent` fires only for a `FLOW`/`subtractable` metric **with quarters inside the year** | Otherwise it fires on diluted EPS for every filer in the universe, and on every metric of every annual-only filer. A flag that fires on everyone is not a flag — this document's own argument about YTD reconciliation. | `_metric_findings`, and `test_findings` |
+
+**Not done, and not startable here: the two research workstreams.** Neither has a green test to
+declare it finished, which [§ 2](#2-considered-and-rejected-an-m2am2b-split) is explicit is how they
+silently eat a week while the code looks complete. Both need a route to sec.gov.
+
+| Open | Gates | State |
+|---|---|---|
+| Fixture curation (~3 d) | Exit criterion 2 — "every fixture's expected series asserted exactly" | The suite asserts **derivations** instead, per [`05-testing.md` § 2](05-testing.md#2-fixtures), so it is green either way and nothing fails to tell you. `PROVENANCE.md` gap 5 says so in the file a reader reaches first. |
+| Coverage measurement over 20 stratified names (~1.5 d) | Exit criterion 1, **and** [spec question 6](#7-spec-questions) | `docs/m2/COVERAGE.md` is the record and is unwritten. The eleven tier-2 orderings therefore remain proposals; DESIGN §4.2 still does not carry them, and `normalize/tags.py` says so where they are declared. |
+
+So **ROADMAP M2's two numeric exit criteria are not yet assessable**, and the third —`as_of`
+demonstrably excluding later restatements — is asserted by
+`test_facts_asof::test_restater_at_2021_06_30_yields_the_first_filing`, including the half that
+distinguishes filtering from post-hoc suppression: `Restatement.superseded` is *empty* at that date.
+
+**One thing this document got wrong about itself.** [§ 10](#10-documentation-changes-m2-required)
+records that both payloads absent yields "two findings"; it is three — `companyfacts_absent`,
+`submissions_absent` and `spine_observed`, the last required by [§ 2](03-statements.md#2-the-period-spine)
+of the statements design. The code is right and the prose was loose. Corrected in
+[`03-statements.md`](03-statements.md); noted here because a section whose job is tracking what moved
+is the one place where being wrong is self-refuting.

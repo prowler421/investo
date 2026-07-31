@@ -109,7 +109,7 @@ crash on a documented, common condition. So both widen, and the two absences are
 |---|---|
 | `facts is None` | Every metric is absent. A `FinancialHistory` is still returned, with a spine (the filings are unaffected), every `MetricCoverage` at `filled=0`, and a `companyfacts_absent` finding. |
 | `profile is None` | No `sic`, no `sic_description`, no `fiscal_year_end`, and no filings — so the spine is empty and falls back to `OBSERVED`. The series are unaffected. |
-| both | An empty history with an `OBSERVED` spine over nothing. `facts` prints a table of dashes and two findings, and exits 0. |
+| both | An empty history with an `OBSERVED` spine over nothing. `facts` prints a table of dashes and **three** findings — `companyfacts_absent`, `submissions_absent` and the `spine_observed` that [§ 2](#2-the-period-spine) requires whenever the denominator is circular — and exits 0. (This row said "two" until implementation; the third was never optional, and omitting it would have printed an unlabelled circular denominator.) |
 
 **`cik` and `name` are therefore separate arguments rather than read off `profile`.** Both are
 always known: a ticker that did not resolve exited 2 in `tickers.py` before `build_history` was

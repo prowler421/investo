@@ -165,18 +165,25 @@ def _settings(
     return load_settings(config_file=config_file, out_dir=out, cache_dir=cache_dir, **overrides)
 
 
+def _version() -> str:
+    """The installed version, or a marker. Shared by ``--version`` and ``report.json``.
+
+    One resolution path, because ``report.json``'s ``generated_by`` and ``investo --version`` disagreeing
+    would make a run record impossible to attribute to a build.
+    """
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        return version("investo")
+    except PackageNotFoundError:
+        # Running from a checkout with no install — `pythonpath` set, nothing on the metadata path.
+        # Reported rather than raised: `--version` failing is worse than `--version` being vague.
+        return "unknown (not installed)"
+
+
 def _version_callback(value: bool) -> None:
     if value:
-        from importlib.metadata import PackageNotFoundError, version
-
-        try:
-            resolved = version("investo")
-        except PackageNotFoundError:
-            # Running from a checkout with no install — `pythonpath` set, nothing on the
-            # metadata path. Reported rather than raised: `--version` failing is worse than
-            # `--version` being vague.
-            resolved = "unknown (not installed)"
-        print(f"investo {resolved}")
+        print(f"investo {_version()}")
         raise typer.Exit(ExitCode.SUCCESS)
 
 
@@ -293,15 +300,48 @@ def facts(
     lookback: Lookback = None,
     as_of: AsOf = None,
     refresh: Refresh = False,
+    json_: Annotated[
+        bool,
+        typer.Option(
+            "--json",
+            help="Write report.json to stdout instead of the table. Composes with redirection.",
+        ),
+    ] = False,
     cache_dir: CacheDir = None,
     config_file: ConfigFile = None,
 ) -> None:
-    """Print normalized financials and the coverage report for TICKER."""
+    """Print normalized financials and the coverage report for TICKER.
+
+    Exits 0 even when data is missing, and **never exits 3**. Exit 3 means "insufficient data, report
+    still written" (DESIGN.md §14) and this command writes no report, so returning it would promise an
+    artifact that does not exist. Thin coverage, a metric that resolves to nothing, fewer than twelve
+    quarters and a CIK with no ``companyfacts`` are all printed and exit 0.
+
+    ``--json`` emits DESIGN.md §4.5's ``report.json`` document on stdout rather than the table. No
+    ``--out``: this command writes no files.
+    """
+    from investo.facts import render_facts, render_json, run_facts
+
     try:
         settings = _settings(config_file=config_file, cache_dir=cache_dir, lookback=lookback)
         parse_lookback(settings.lookback)
-        _resolve_as_of(as_of)
-        raise NotImplementedYetError.at("M2", f"facts {ticker}")
+        # The clock is read here and only here. Everything below the command boundary receives the
+        # resolved date, so nothing under `normalize/` or `report/` can make two runs either side of
+        # midnight differ — enforced by an AST rule, not by convention.
+        history, envelope = run_facts(
+            ticker,
+            settings=settings,
+            refresh=refresh,
+            as_of=_resolve_as_of(as_of),
+            version=_version(),
+        )
+        # `serialize` already ends its document with a newline, so `--json` prints with `end=""`:
+        # the bytes on stdout are then exactly the serializer's, which is what §11's gate compares
+        # and what `> report.json` has to produce for M3 to inherit the gate rather than rebuild it.
+        if json_:
+            print(render_json(history, envelope), end="")
+        else:
+            print(render_facts(history))
     except InvestoError as error:
         raise _fail(error) from error
 

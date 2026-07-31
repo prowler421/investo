@@ -183,6 +183,36 @@ named, decided from the table rather than now.
 quality-score metric set; every fixture's expected series asserted exactly; `as_of`
 demonstrably excludes later restatements.
 
+**Status (2026-08-01): code complete, one of three exit criteria met.** Everything designed in
+[`docs/m2/`](docs/m2/README.md) is built and tested — the chain registry with both tiers, the
+pipeline, the period spine, the coverage report, `report.json` under the determinism gate, and
+`investo facts TICKER [--json]`. The third exit criterion is met and asserted
+(`test_facts_asof::test_restater_at_2021_06_30_yields_the_first_filing`, which checks the value
+*and* that the restatement record is empty at that date — the difference between filtering and
+post-hoc suppression).
+
+**The other two are blocked on the milestone's two research workstreams, both of which need a route
+to sec.gov and neither of which has a green test to declare it finished** — exactly the risk
+[`docs/m2/README.md` § 2](docs/m2/README.md#2-considered-and-rejected-an-m2am2b-split) names:
+
+1. **Fixture curation** (~3 d, carried from M1). Until it lands, "every fixture's expected series
+   asserted exactly" is self-referential — a value assertion against a synthetic payload tests the
+   generator. The suite asserts *derivations* instead, so it is green either way, which is why the
+   gap is recorded in `tests/fixtures/edgar/PROVENANCE.md` rather than left to be noticed.
+2. **The coverage measurement** over 20 stratified names (~1.5 d). `docs/m2/COVERAGE.md` is the
+   record and is unwritten, so the ≥90% criterion is not yet assessable — **and the eleven tier-2
+   chain orderings remain proposals.** They are declared in `normalize/tags.py` with that stated, and
+   DESIGN §4.2 still does not carry them. A ROADMAP amendment here is an expected outcome, not a
+   failure; the failure mode to avoid is hitting 90% on long-term debt by adding a chain member that
+   means something slightly different.
+
+Three divergences from the design, each recorded at the code and summarized in
+[`docs/m2/README.md` § 11](docs/m2/README.md#11-what-landed-and-what-did-not): `STUBYEAR`'s stub is 60
+days rather than 140 (140 is inside the YTD band, so it would test the wrong rule); `MetricCoverage`
+gained three counters the design required *"in the coverage report"* without giving fields for; and
+`q4_absent` is restricted to metrics a Q4 could exist for, since otherwise it fires on diluted EPS
+for every filer alive.
+
 **Risks:** this phase is where schedule slips. The traps in DESIGN.md §4.2 are confirmed
 against live data, not hypothetical — `fy`/`fp` meaning the *filing's* fiscal year rather
 than the fact's, quarterly restatements appearing four times, and discrete Q4 sometimes
