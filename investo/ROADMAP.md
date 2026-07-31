@@ -57,6 +57,25 @@ direction is the one that matters as the CLI grows — see `tests/test_cli_surfa
 
 **Goal:** `investo fetch AAPL` writes raw payloads to cache and prints a summary.
 
+Detailed design: [`docs/m1/`](docs/m1/README.md) — per-module contracts, the on-disk cache
+format, the CIK/accession transform table, and the test plan. It is subordinate to this file and
+to DESIGN.md; where it diverges, the divergence is recorded in
+[`docs/m1/README.md` § Spec questions](docs/m1/README.md#7-spec-questions) rather than resolved
+in code. **All nine were accepted on review (2026-07-31); they are recorded, not blocking.** What
+remains is folding them into DESIGN.md.
+
+Two revisions to this milestone's own entry, from that review:
+
+- **M1 splits into M1a and M1b.** M1a — domain types, cache, EDGAR client, tickers,
+  companyfacts, submissions, prices, market cap — meets all four exit criteria below and
+  unblocks M2 and M3 completely. M1b — frames, documents, events, ownership, proxy, finra —
+  feeds only M4 (`peers.py`, via frames) and M4.5, and lands before M4.
+- **The ~1.5 week estimate is superseded.** M1a alone is re-estimated at **~2.5–3 weeks
+  part-time**; the design added machinery that was not in the original count. Of that,
+  **~3 days is fixture curation**, which is research rather than coding, is unblocked by
+  everything, and should run in parallel from day one. Breakdown in
+  [`docs/m1/README.md` § Sizing](docs/m1/README.md#sizing--m1a-is-2-weeks-not-the-fast-half-of-15).
+
 - `domain/models.py`, `periods.py`, `provenance.py` — frozen dataclasses, `SourceRef`,
   `FiscalPeriod`. Built first; everything downstream types against them.
 - `ingest/cache.py` — content-addressed, append-only, `fetched_at` + schema version
