@@ -492,6 +492,427 @@ def _noq4() -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# companyfacts fixtures — M2's six additions
+# ---------------------------------------------------------------------------
+# Each closes a gap the M1 set cannot exercise, established by parsing every payload in
+# `tests/fixtures/edgar/companyfacts/`: no fact anywhere has a duration in 101-349 days or outside
+# 80-380, no tier-2 tag appears in any file, neither NCI tag appears, and the only units present are
+# `USD`, `USD/shares`, `shares` and `pure`. Each gap is a claim that was checked, not assumed.
+def _ytdonly() -> dict[str, Any]:
+    """**Cumulative-only 10-Q presentation.** No fixture contained a YTD fact at all.
+
+    Every M1 payload has discrete quarters, so `docs/m2/02-facts.md` §7 was unfalsifiable: a
+    differencing implementation that never fires passed every test.
+
+    CY2023 is filed cumulatively — 3M, 6M, 9M, FY, and no discrete Q2/Q3::
+
+        Q1  100  (2023-01-01..2023-03-31,  90d -> QUARTER)
+        H1  210  (2023-01-01..2023-06-30, 181d -> YTD)      Q2 = 210 - 100 = 110
+        9M  330  (2023-01-01..2023-09-30, 273d -> YTD)      Q3 = 330 - 210 = 120
+        FY  460  (2023-01-01..2023-12-31, 365d -> ANNUAL)
+
+    **Q4 must stay absent**, and that is the point of the year rather than an oversight: the only
+    quarters available to subtract are Q2 and Q3, both *derived*, and §5's rule is that nothing is
+    derived from a derived part. The residual over the one as-filed quarter is 275 days, classifies
+    as `YTD`, and the derivation refuses. A test that expected 130 here would be asserting that the
+    two-level rule had been broken.
+
+    CY2024 files Q1, H1 **and** a discrete Q2, so the H1 fact is redundant: the discrete quarter wins
+    and the YTD fact is dropped and counted, never reconciled.
+    """
+    rows = [
+        fact(start="2023-01-01", end="2023-03-31", val=100000000, fy=2023, fp="Q1", form="10-Q", filed="2023-05-04"),
+        fact(start="2023-01-01", end="2023-06-30", val=210000000, fy=2023, fp="Q2", form="10-Q", filed="2023-08-04"),
+        fact(start="2023-01-01", end="2023-09-30", val=330000000, fy=2023, fp="Q3", form="10-Q", filed="2023-11-03"),
+        fact(start="2023-01-01", end="2023-12-31", val=460000000, fy=2023, fp="FY", filed="2024-02-20"),
+        fact(start="2024-01-01", end="2024-03-31", val=118000000, fy=2024, fp="Q1", form="10-Q", filed="2024-05-03"),
+        fact(start="2024-01-01", end="2024-06-30", val=245000000, fy=2024, fp="Q2", form="10-Q", filed="2024-08-02"),
+        fact(start="2024-04-01", end="2024-06-30", val=127000000, fy=2024, fp="Q2", form="10-Q", filed="2024-08-02"),
+    ]
+    return payload(
+        1000047,
+        "Example Cumulative Corp",
+        {
+            "us-gaap": {"Revenues": tagged({"USD": rows})},
+            "dei": {
+                "EntityCommonStockSharesOutstanding": tagged(
+                    {"shares": [fact(val=52000000, end="2024-08-01")]}
+                )
+            },
+        },
+    )
+
+
+def _tier2() -> dict[str, Any]:
+    """**Every tier-2 concept, the SG&A sum, and both exclusivity shapes in one payload.**
+
+    No M1 payload contained a single tier-2 tag, so half of ROADMAP M2's exit criterion was untested
+    by anything. This carries COGS, SG&A, D&A, interest, SBC, receivables, retained earnings, current
+    assets and current liabilities, plus `GrossProfit` alongside COGS so both branches of that
+    derivation have a fixture.
+
+    Three separate traps, each on a different metric, because one metric can only have one shape:
+
+    - **Revenue partitions.** Excluding-assessed-tax for FY2021-22, including for FY2023-24 — a
+      filer that switched permanently, e.g. on a new tax nexus. Contiguous prefix and suffix, so
+      `docs/m2/01-tags.md` §5 requires the series to be **stitched** and flagged with the boundary
+      date, not collapsed to the majority.
+    - **Long-term debt interleaves.** `LongTermDebt`, then `LongTermDebtAndCapitalLeaseObligations`,
+      then back, then forth. That is inconsistent tagging with no event behind it, so majority-wins
+      applies and the tie breaks to the earlier chain index. **A stitch-everything implementation
+      passes the revenue case and fails this one**, which is why both shapes have to be present.
+    - **SG&A splits mid-history.** The combined tag for FY2021-22, then `GeneralAndAdministrative` +
+      `SellingAndMarketing` for FY2023-24. Substituting one component for the combined figure
+      understates the metric by the other, silently, and Piotroski's margin test would improve for a
+      filer that merely changed its presentation.
+
+    Net income is tagged `ProfitLoss` **only** — including noncontrolling interest, while equity is
+    parent-only — so the scope-mismatch finding has a target. With one member of its exclusivity
+    group present there is no conflict to resolve, which is what keeps that finding independent of
+    the two above.
+    """
+    years = [
+        ("2021-01-01", "2021-12-31", 2021, "2022-02-18"),
+        ("2022-01-01", "2022-12-31", 2022, "2023-02-17"),
+        ("2023-01-01", "2023-12-31", 2023, "2024-02-16"),
+        ("2024-01-01", "2024-12-31", 2024, "2025-02-14"),
+    ]
+
+    def annual(values: list[int]) -> list[dict[str, Any]]:
+        return [
+            fact(start=start, end=end, val=value, fy=fy, filed=filed)
+            for (start, end, fy, filed), value in zip(years, values, strict=False)
+        ]
+
+    def instants(values: list[int]) -> list[dict[str, Any]]:
+        return [
+            fact(end=end, val=value, fy=fy, filed=filed)
+            for (_, end, fy, filed), value in zip(years, values, strict=False)
+        ]
+
+    excluding = "RevenueFromContractWithCustomerExcludingAssessedTax"
+    including = "RevenueFromContractWithCustomerIncludingAssessedTax"
+    return payload(
+        1000048,
+        "Example Tier Two Inc.",
+        {
+            "us-gaap": {
+                # Partition: a permanent switch, to be stitched and dated.
+                excluding: tagged({"USD": annual([4000000000, 4200000000])[:2]}),
+                including: tagged(
+                    {
+                        "USD": [
+                            fact(start=start, end=end, val=value, fy=fy, filed=filed)
+                            for (start, end, fy, filed), value in zip(years[2:], [4550000000, 4810000000], strict=True)
+                        ]
+                    }
+                ),
+                "ProfitLoss": tagged({"USD": annual([510000000, 545000000, 590000000, 622000000])}),
+                "GrossProfit": tagged(
+                    # FY2024 is absent, so the `revenue − cogs` derivation has a period to fire on
+                    # while the other three stay as filed.
+                    {"USD": annual([1600000000, 1680000000, 1820000000])[:3]}
+                ),
+                "CostOfGoodsAndServicesSold": tagged(
+                    {"USD": annual([2400000000, 2520000000, 2730000000, 2886000000])}
+                ),
+                "SellingGeneralAndAdministrativeExpense": tagged(
+                    {"USD": annual([700000000, 735000000])[:2]}
+                ),
+                # The split presentation: both components required, summed, never substituted.
+                "GeneralAndAdministrativeExpense": tagged(
+                    {
+                        "USD": [
+                            fact(start=start, end=end, val=value, fy=fy, filed=filed)
+                            for (start, end, fy, filed), value in zip(years[2:], [430000000, 452000000], strict=True)
+                        ]
+                    }
+                ),
+                "SellingAndMarketingExpense": tagged(
+                    {
+                        "USD": [
+                            fact(start=start, end=end, val=value, fy=fy, filed=filed)
+                            for (start, end, fy, filed), value in zip(years[2:], [365000000, 388000000], strict=True)
+                        ]
+                    }
+                ),
+                "DepreciationDepletionAndAmortization": tagged(
+                    {"USD": annual([210000000, 224000000, 239000000, 251000000])}
+                ),
+                "InterestExpense": tagged({"USD": annual([48000000, 51000000])[:2]}),
+                # Signed the other way by construction: a net expense is negative here, and the
+                # chain's `flip_sign` turns it into the expense-positive convention M2 emits.
+                "InterestIncomeExpenseNet": tagged(
+                    {
+                        "USD": [
+                            fact(start=start, end=end, val=value, fy=fy, filed=filed)
+                            for (start, end, fy, filed), value in zip(years[2:], [-54000000, -57000000], strict=True)
+                        ]
+                    }
+                ),
+                "ShareBasedCompensation": tagged(
+                    {"USD": annual([88000000, 96000000, 104000000, 111000000])}
+                ),
+                "AccountsReceivableNetCurrent": tagged(
+                    {"USD": instants([620000000, 651000000, 703000000, 744000000])}
+                ),
+                "RetainedEarningsAccumulatedDeficit": tagged(
+                    {"USD": instants([1900000000, 2200000000, 2540000000, 2900000000])}
+                ),
+                "AssetsCurrent": tagged(
+                    {"USD": instants([3100000000, 3260000000, 3480000000, 3690000000])}
+                ),
+                "LiabilitiesCurrent": tagged(
+                    {"USD": instants([1400000000, 1470000000, 1560000000, 1640000000])}
+                ),
+                "Assets": tagged({"USD": instants([8200000000, 8600000000, 9100000000, 9600000000])}),
+                "StockholdersEquity": tagged(
+                    {"USD": instants([3300000000, 3600000000, 3950000000, 4300000000])}
+                ),
+                # Interleave: noise, to be collapsed to the majority. Ties break to the earlier
+                # chain index, which is `LongTermDebt`.
+                "LongTermDebt": tagged(
+                    {
+                        "USD": [
+                            fact(end="2021-12-31", val=1200000000, fy=2021, filed="2022-02-18"),
+                            fact(end="2023-12-31", val=1310000000, fy=2023, filed="2024-02-16"),
+                        ]
+                    }
+                ),
+                "LongTermDebtAndCapitalLeaseObligations": tagged(
+                    {
+                        "USD": [
+                            fact(end="2022-12-31", val=1440000000, fy=2022, filed="2023-02-17"),
+                            fact(end="2024-12-31", val=1520000000, fy=2024, filed="2025-02-14"),
+                        ]
+                    }
+                ),
+                "OperatingLeaseLiabilityNoncurrent": tagged(
+                    {"USD": instants([310000000, 328000000, 344000000, 361000000])}
+                ),
+                "ProceedsFromIssuanceOfCommonStock": tagged(
+                    {"USD": annual([22000000, 19000000, 26000000, 31000000])}
+                ),
+            },
+            "dei": {
+                "EntityCommonStockSharesOutstanding": tagged(
+                    {"shares": [fact(val=141000000, end="2025-02-01")]}
+                )
+            },
+        },
+    )
+
+
+def _nci() -> dict[str, Any]:
+    """**The equity trap in the liabilities derivation, with a material noncontrolling interest.**
+
+    `Liabilities` is absent — the ~11% of filers §4.2 says never tag it, which is precisely the
+    population that reaches the derivation. So total liabilities must come from
+    `LiabilitiesAndStockholdersEquity` minus the **including-NCI** equity tag::
+
+        2023-12-31   L&SE 10,000   equity incl. NCI 4,000   equity parent-only 3,400
+                     correct  10,000 - 4,000 = 6,000
+                     tempting 10,000 - 3,400 = 6,600        <- overstates by the 600 NCI
+
+    Both equity tags are present for that year on purpose: the only assertion that distinguishes the
+    right derivation from the tempting one is that the results differ by **exactly** the NCI, and it
+    cannot be written unless the fixture carries both.
+
+    2024-12-31 drops the including-NCI tag, so the parent-only fallback fires — better than omitting
+    the metric, and recorded as `liabilities_nci_approximated` rather than done invisibly.
+    """
+    return payload(
+        1000049,
+        "Example Consolidated Group",
+        {
+            "us-gaap": {
+                "Revenues": tagged(
+                    {
+                        "USD": [
+                            fact(start="2023-01-01", end="2023-12-31", val=7400000000, fy=2023, filed="2024-02-21"),
+                            fact(start="2024-01-01", end="2024-12-31", val=7900000000, fy=2024, filed="2025-02-19"),
+                        ]
+                    }
+                ),
+                "Assets": tagged(
+                    {
+                        "USD": [
+                            fact(end="2023-12-31", val=10000000000, fy=2023, filed="2024-02-21"),
+                            fact(end="2024-12-31", val=11000000000, fy=2024, filed="2025-02-19"),
+                        ]
+                    }
+                ),
+                "LiabilitiesAndStockholdersEquity": tagged(
+                    {
+                        "USD": [
+                            fact(end="2023-12-31", val=10000000000, fy=2023, filed="2024-02-21"),
+                            fact(end="2024-12-31", val=11000000000, fy=2024, filed="2025-02-19"),
+                        ]
+                    }
+                ),
+                "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest": tagged(
+                    {"USD": [fact(end="2023-12-31", val=4000000000, fy=2023, filed="2024-02-21")]}
+                ),
+                "StockholdersEquity": tagged(
+                    {
+                        "USD": [
+                            fact(end="2023-12-31", val=3400000000, fy=2023, filed="2024-02-21"),
+                            fact(end="2024-12-31", val=3800000000, fy=2024, filed="2025-02-19"),
+                        ]
+                    }
+                ),
+            },
+            "dei": {
+                "EntityCommonStockSharesOutstanding": tagged(
+                    {"shares": [fact(val=305000000, end="2025-02-03")]}
+                )
+            },
+        },
+    )
+
+
+def _stubyear() -> dict[str, Any]:
+    """**A fiscal-year change: a 60-day stub between two years, and a 53-week year.**
+
+    No fact in the M1 set has a duration outside 80-380 days, so neither side of §4.2(c)'s narrow
+    bands was pinned::
+
+        2021-01-01..2021-12-31   365d -> ANNUAL   kept
+        2022-01-01..2022-03-01    60d -> OTHER    dropped, and **counted**
+        2022-03-02..2023-03-07   371d -> ANNUAL   kept — a 53-week year needs no special case
+
+    The 371-day year is the boundary that matters: ``ANNUAL_DAYS`` is ``range(350, 381)``, so 371 is
+    inside it, and it is the first thing a reader assumes the narrow band breaks. The stub is the
+    other side — dropping it is right, dropping it *silently* is not, which is why the count is
+    per-metric in the coverage report.
+
+    **The stub is 60 days, not the 140 ``docs/m2/05-testing.md`` §2 suggests**, and the difference is
+    not cosmetic: 140 days falls in ``PeriodKind.YTD``'s 101-349 band, so a 140-day stub exercises the
+    *YTD* disposition rather than the ``OTHER`` one. ``OTHER`` is under 80 days or over 380, so a
+    two-month transition period is what actually reaches that branch. Recorded here because a fixture
+    that silently tests a different rule than the one it is named for is worse than no fixture.
+    """
+    return payload(
+        1000050,
+        "Example Transition Holdings",
+        {
+            "us-gaap": {
+                "Revenues": tagged(
+                    {
+                        "USD": [
+                            fact(start="2021-01-01", end="2021-12-31", val=880000000, fy=2021, filed="2022-03-01"),
+                            fact(start="2022-01-01", end="2022-03-01", val=141000000, fy=2022, filed="2022-06-14"),
+                            fact(start="2022-03-02", end="2023-03-07", val=1010000000, fy=2023, filed="2023-06-06"),
+                        ]
+                    }
+                ),
+                "Assets": tagged(
+                    {
+                        "USD": [
+                            fact(end="2021-12-31", val=4100000000, fy=2021, filed="2022-03-01"),
+                            fact(end="2023-03-07", val=4400000000, fy=2023, filed="2023-06-06"),
+                        ]
+                    }
+                ),
+            },
+            "dei": {
+                "EntityCommonStockSharesOutstanding": tagged(
+                    {"shares": [fact(val=76000000, end="2023-08-01")]}
+                )
+            },
+        },
+    )
+
+
+def _badunit() -> dict[str, Any]:
+    """**A unit filter with something to filter.** EPS under `USD`, revenue under `EUR`.
+
+    §4.2 says EPS arrives under `USD/shares`, and some filers tag one under `USD` — a resolver that
+    ignores unit then reports an EPS three orders of magnitude off. The `EUR` revenue fact is §12's
+    non-USD reporting currency: the filter turns "out of scope" from a comment into an absence that
+    appears in the coverage report, which is the difference between a known limitation and a wrong
+    number.
+
+    FY2023 carries the correct spellings of both and FY2024 the wrong ones, so the assertion is that
+    the wrong-unit facts are **excluded and counted** while the right ones survive — not merely that
+    the metric is absent, which would pass for a resolver that dropped everything.
+    """
+    return payload(
+        1000051,
+        "Example Mixed Units Ltd",
+        {
+            "us-gaap": {
+                "Revenues": tagged(
+                    {
+                        "USD": [
+                            fact(start="2023-01-01", end="2023-12-31", val=1250000000, fy=2023, filed="2024-02-27")
+                        ],
+                        "EUR": [
+                            fact(start="2024-01-01", end="2024-12-31", val=1180000000, fy=2024, filed="2025-02-25")
+                        ],
+                    }
+                ),
+                "EarningsPerShareDiluted": tagged(
+                    {
+                        "USD/shares": [
+                            fact(start="2023-01-01", end="2023-12-31", val=3.42, fy=2023, filed="2024-02-27")
+                        ],
+                        "USD": [
+                            fact(start="2024-01-01", end="2024-12-31", val=3.71, fy=2024, filed="2025-02-25")
+                        ],
+                    }
+                ),
+                "Assets": tagged(
+                    {
+                        "USD": [
+                            fact(end="2023-12-31", val=6200000000, fy=2023, filed="2024-02-27"),
+                            fact(end="2024-12-31", val=6500000000, fy=2024, filed="2025-02-25"),
+                        ]
+                    }
+                ),
+            },
+            "dei": {
+                "EntityCommonStockSharesOutstanding": tagged(
+                    {"shares": [fact(val=98000000, end="2025-02-14")]}
+                )
+            },
+        },
+    )
+
+
+def _noperiodic() -> dict[str, Any]:
+    """**Facts, but no 10-K and no 10-Q** — the only shape that reaches the `OBSERVED` spine.
+
+    `ARXS` was the obvious candidate for this and turns out to have a 10-Q, so its spine origin is
+    `FILINGS` with an empty annual bucket. A circular denominator needs a registrant whose forms are
+    `S-1/A` and `8-K` only *and* which has published facts, which is what this pair is for — see
+    `_noperiodic_submissions`.
+
+    The coverage figure computed against this spine is close to meaningless, and that is the point:
+    the test asserts the origin is labelled, because a 100% figure that quietly came from an
+    `OBSERVED` spine is the single most misleading number this milestone could produce.
+    """
+    return payload(
+        1000052,
+        "Example Prelisting Corp",
+        {
+            "us-gaap": {
+                "Revenues": tagged(
+                    {
+                        "USD": [
+                            fact(start="2025-01-01", end="2025-12-31", val=64000000, fy=None, fp=None, form="S-1/A", filed="2026-03-10")
+                        ]
+                    }
+                ),
+                "Assets": tagged(
+                    {"USD": [fact(end="2025-12-31", val=210000000, fy=None, fp=None, form="S-1/A", filed="2026-03-10")]}
+                ),
+            }
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
 # tickers
 # ---------------------------------------------------------------------------
 def _tickers() -> dict[str, Any]:
@@ -519,6 +940,15 @@ def _tickers() -> dict[str, Any]:
             [1908259, "Example Newco Inc.", "EXNC", "Nasdaq"],
             [1000045, "Example Restated Corp", "EXRS", "Nasdaq"],
             [1000046, "Example NoQ4 Industries", "EXNQ", "Nasdaq"],
+            # M2's six additions. Present here so each is reachable end-to-end through
+            # `investo facts TICKER`, not only through `build_history` in a unit test — the command
+            # is where the absence paths and the exit code live.
+            [1000047, "Example Cumulative Corp", "EXYT", "Nasdaq"],
+            [1000048, "Example Tier Two Inc.", "EXT2", "Nasdaq"],
+            [1000049, "Example Consolidated Group", "EXNI", "Nasdaq"],
+            [1000050, "Example Transition Holdings", "EXSY", "Nasdaq"],
+            [1000051, "Example Mixed Units Ltd", "EXBU", "Nasdaq"],
+            [1000052, "Example Prelisting Corp", "EXNP", "Nasdaq"],
         ],
     }
 
@@ -864,6 +1294,91 @@ def _aapl_submissions() -> dict[str, Any]:
     }
 
 
+def _noperiodic_submissions() -> dict[str, Any]:
+    """A filing history with **no periodic report of either kind** — `S-1/A`, `8-K`, `EFFECT` only.
+
+    Paired with ``_noperiodic``'s companyfacts. Together they are the only reachable route to
+    :attr:`SpineOrigin.OBSERVED`: facts exist, so a numerator exists, and no ``10-K`` or ``10-Q``
+    exists, so the filing history supplies no denominator. Either half alone leaves that branch
+    untested — which is what ``ARXS`` demonstrated by having a 10-Q.
+
+    ``sic`` is present so the finding under test is ``spine_observed`` alone, rather than
+    ``spine_observed`` plus ``submissions_absent``.
+    """
+    rows = [
+        {
+            "accessionNumber": "0001193125-26-100001",
+            "filingDate": "2026-03-10",
+            "reportDate": "",
+            "acceptanceDateTime": "2026-03-10T16:02:11.000Z",
+            "act": "33",
+            "form": "S-1/A",
+            "fileNumber": "333-290001",
+            "filmNumber": "26700001",
+            "items": "",
+            "core_type": "S-1/A",
+            "size": 5512403,
+            "isXBRL": 1,
+            "isInlineXBRL": 1,
+            "isXBRLNumeric": 1,
+            "primaryDocument": "d900001ds1a.htm",
+            "primaryDocDescription": "S-1/A",
+        },
+        {
+            "accessionNumber": "9999999997-26-000501",
+            "filingDate": "2026-03-24",
+            "reportDate": "",
+            "acceptanceDateTime": "2026-03-24T00:04:02.000Z",
+            "act": "",
+            "form": "EFFECT",
+            "fileNumber": "333-290001",
+            "filmNumber": "",
+            "items": ",,",
+            "core_type": "EFFECT",
+            "size": 1041,
+            "isXBRL": 0,
+            "isInlineXBRL": 0,
+            "isXBRLNumeric": None,
+            "primaryDocument": "",
+            "primaryDocDescription": "",
+        },
+        {
+            "accessionNumber": "0001193125-26-100777",
+            "filingDate": "2026-04-02",
+            "reportDate": "2026-04-01",
+            "acceptanceDateTime": "2026-04-02T13:11:45.000Z",
+            "act": "34",
+            "form": "8-K",
+            "fileNumber": "001-42999",
+            "filmNumber": "26710777",
+            "items": "5.02",
+            "core_type": "8-K",
+            "size": 41220,
+            "isXBRL": 1,
+            "isInlineXBRL": 1,
+            "isXBRLNumeric": 0,
+            "primaryDocument": "exnp-20260401.htm",
+            "primaryDocDescription": "8-K",
+        },
+    ]
+    return {
+        "cik": "0001000052",
+        "entityType": "operating",
+        "sic": "7372",
+        "sicDescription": "Services-Prepackaged Software",
+        "name": "Example Prelisting Corp",
+        "tickers": ["EXNP"],
+        "exchanges": ["Nasdaq"],
+        "fiscalYearEnd": "1231",
+        "stateOfIncorporation": "DE",
+        "addresses": {"business": {"street1": "1 Example Way", "city": "Austin", "stateOrCountry": "TX"}},
+        "phone": "(512) 555-0100",
+        "flags": "",
+        "formerNames": [],
+        "filings": {"recent": _columns(rows), "files": []},
+    }
+
+
 def _aapl_page() -> dict[str, Any]:
     """An overflow page: **flat** columnar, no ``filings`` wrapper, no company metadata.
 
@@ -1130,6 +1645,13 @@ def main() -> int:
         ("IPO", _ipo),
         ("RESTATER", _restater),
         ("NOQ4", _noq4),
+        # M2's six.
+        ("YTDONLY", _ytdonly),
+        ("TIER2", _tier2),
+        ("NCI", _nci),
+        ("STUBYEAR", _stubyear),
+        ("BADUNIT", _badunit),
+        ("NOPERIODIC", _noperiodic),
     ):
         _write_json(edgar / "companyfacts" / f"{name}.trimmed.json", builder())
 
@@ -1140,6 +1662,7 @@ def main() -> int:
     _write_json(edgar / "submissions" / "ARXS.json", _arxs_submissions())
     _write_json(edgar / "submissions" / "AAPL.json", _aapl_submissions())
     _write_json(edgar / "submissions" / "AAPL-submissions-001.json", _aapl_page())
+    _write_json(edgar / "submissions" / "NOPERIODIC.json", _noperiodic_submissions())
 
     print("malformed:")
     _write_json(edgar / "malformed" / "short_column.json", _short_column())

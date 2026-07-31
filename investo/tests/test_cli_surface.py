@@ -42,6 +42,10 @@ _FLAG_OWNER = {
     "--assumptions": ("analyze",),
     "--as-of": ("analyze", "facts"),
     "--refresh": ("analyze", "facts", "fetch"),
+    # M2. `report.json` on stdout rather than an `--out`: `facts` writes no files, and
+    # `docs/m1/README.md` §3 declined `--json` on `fetch` on the grounds that report.json is the
+    # machine-readable surface this project committed to — which is an argument for putting it here.
+    "--json": ("facts",),
     "--explain": ("analyze",),
     "--brief": ("analyze",),
     "--older-than": ("cache prune",),
@@ -198,7 +202,6 @@ def test_config_error_message_goes_to_stderr(configured: None) -> None:
     ("command", "milestone"),
     [
         ("analyze AAPL", "M3"),
-        ("facts AAPL", "M2"),
         ("backtest", "M7"),
     ],
 )
@@ -209,11 +212,11 @@ def test_stub_exits_70_and_names_its_milestone(
 
     Exit 70 rather than 0: a script must not read "parsed successfully" as "ran".
 
-    **`fetch` and `cache prune` left this list in M1**, which is the intended lifecycle — ROADMAP
-    § Decided during design: *"Exit 70 for an unimplemented command... It disappears with the last
-    stub."* Removing a row here is what landing a milestone looks like, and the three that remain are
-    the ones M2, M3 and M7 own. When the last one goes, `NotImplementedYetError` and
-    `ExitCode.NOT_IMPLEMENTED` go with it.
+    **`fetch` and `cache prune` left this list in M1 and `facts` left it in M2**, which is the intended
+    lifecycle — ROADMAP § Decided during design: *"Exit 70 for an unimplemented command... It
+    disappears with the last stub."* Removing a row here is what landing a milestone looks like, and
+    the two that remain are the ones M3 and M7 own. When the last one goes, `NotImplementedYetError`
+    and `ExitCode.NOT_IMPLEMENTED` go with it.
     """
     result = runner.invoke(app, command.split())
     assert result.exit_code == int(ExitCode.NOT_IMPLEMENTED)
@@ -232,10 +235,14 @@ def test_implemented_commands_do_not_report_not_implemented(configured: None) ->
     exit 2, 4 or 5 depending on how far it gets, and any of those is fine. 70 is the only wrong
     answer.
     """
-    for command in (["fetch", "AAPL"], ["cache", "prune", "--older-than", "90d"]):
+    for command in (
+        ["fetch", "AAPL"],
+        ["facts", "AAPL"],
+        ["cache", "prune", "--older-than", "90d"],
+    ):
         result = runner.invoke(app, command)
         assert result.exit_code != int(ExitCode.NOT_IMPLEMENTED), (
-            f"`investo {' '.join(command)}` still reports exit 70; its M1 body did not land"
+            f"`investo {' '.join(command)}` still reports exit 70; its body did not land"
         )
 
 
@@ -245,14 +252,14 @@ def test_stub_is_reached_only_after_config_resolves() -> None:
     Otherwise a command would report "not implemented" for a run that would have failed at exit 5
     anyway, and the config layer would go unexercised.
 
-    Uses `facts`, which is still a stub. It was written against `fetch` in M0, and M1 implementing
-    `fetch` is exactly why a test like this needs a subject that is still unimplemented — the
-    property is about the *ordering* of config resolution against the stub raise, not about any one
-    command.
+    Uses `analyze`, which is still a stub. It was written against `fetch` in M0 and moved to `facts`
+    in M1; M2 implementing `facts` is exactly why a test like this needs a subject that is still
+    unimplemented — the property is about the *ordering* of config resolution against the stub raise,
+    not about any one command.
     """
-    result = runner.invoke(app, ["facts", "AAPL"])
+    result = runner.invoke(app, ["analyze", "AAPL"])
     assert result.exit_code == int(ExitCode.CONFIG_ERROR)
-    assert "M2" not in result.output
+    assert "M3" not in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -392,10 +399,10 @@ def test_main_returns_the_exit_code(configured: None) -> None:
     """`main` reports codes rather than raising, so `python -m investo` and the console script
     agree.
 
-    `facts` rather than `fetch`: M1 implemented `fetch`, and this test needs a command whose exit
-    code is known without a network round trip.
+    `analyze` rather than `fetch` or `facts`: both of those are implemented now, and this test needs a
+    command whose exit code is known without a network round trip.
     """
-    assert main(["facts", "AAPL"]) == int(ExitCode.NOT_IMPLEMENTED)
+    assert main(["analyze", "AAPL"]) == int(ExitCode.NOT_IMPLEMENTED)
 
 
 def test_main_returns_zero_for_help() -> None:

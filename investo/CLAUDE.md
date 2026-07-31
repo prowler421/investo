@@ -5,15 +5,23 @@ Guidance for Claude Code (and other AI assistants) contributing to **investo**.
 ## What this project is
 
 Investo turns a NASDAQ ticker into a fundamental due-diligence PDF built from SEC filings. It
-is currently at **M1 built, M2 designed**. `investo fetch TICKER` and `investo cache prune` work:
-EDGAR and price payloads are fetched through a rate-limited choke point, cached immutably, and
-parsed into typed rows keyed by XBRL tag. Nothing is normalized, analyzed or rendered yet —
-`analyze`, `facts` and `backtest` parse their full flag surface and exit 70 naming the milestone
-that fills them in.
+is currently at **M2 built**. `investo fetch TICKER`, `investo facts TICKER` and
+`investo cache prune` work: EDGAR and price payloads are fetched through a rate-limited choke
+point, cached immutably, parsed into typed rows keyed by XBRL tag, and normalized into per-metric
+annual and quarterly series in which every figure traces to an accession and a tag. `facts --json`
+emits DESIGN §4.5's `report.json`, which is under the §11 determinism gate. Nothing is analyzed or
+rendered yet — `analyze` and `backtest` parse their full flag surface and exit 70 naming the
+milestone that fills them in.
 
 M2's design is in [`docs/m2/`](docs/m2/README.md) and its seventeen spec questions were accepted on
 review; the decisions are in DESIGN §3.2, §4.2, §4.2.1, §4.5, §11 and ROADMAP § Decided during
 design. Read `docs/m2/README.md` before touching `normalize/`.
+
+**Two M2 workstreams are research and are not done**, and both are recorded rather than assumed:
+the curated real-filing fixtures (so DESIGN §11's *"assert exact expected series"* is still
+self-referential — see `tests/fixtures/edgar/PROVENANCE.md`) and the twenty-name coverage
+measurement that `docs/m2/COVERAGE.md` is the record for. Until the second lands, the **tier-2 chain
+orderings in `normalize/tags.py` are provisional** and DESIGN §4.2 deliberately does not carry them.
 
 `DESIGN.md` is **normative** on architecture and data handling; `ROADMAP.md` is normative on
 sequencing and scope. On any conflict between those documents and a comment or docstring in the
@@ -39,20 +47,26 @@ src/investo/
 ├── config.py         # pydantic-settings: TOML + env, INVESTO_ prefix       [M0]
 ├── errors.py         # ExitCode (DESIGN §14) + the exception hierarchy      [M0]
 ├── fetch.py          # `investo fetch` orchestration, summary, absences     [M1]
+├── facts.py          # `investo facts` orchestration, table, --json         [M2]
 ├── domain/           # models, periods, provenance — frozen, zero I/O       [M1]
 ├── ingest/
 │   ├── cache.py      # content-addressed, append-only, manifest hash        [M1]
 │   ├── edgar/        # client (the only sec.gov caller) + 9 parsers         [M1]
 │   ├── finra.py      # short interest, snapshotted                          [M1]
 │   └── prices/       # protocol + tiingo / yfinance / stooq                 [M1]
-├── normalize/        # tags, facts, statements                              [M2 — not built]
-└── report/           # serialize.py; charts and render arrive in M3         [M2 — not built]
-tests/                # pytest — ~30 modules, fixtures, AST layering rules
+├── normalize/
+│   ├── tags.py       # the chain registry — the only home for a us-gaap tag [M2]
+│   ├── facts.py      # as_of, dedup, buckets, residual recovery             [M2]
+│   └── statements.py # FinancialHistory, the period spine, coverage         [M2]
+└── report/
+    └── serialize.py  # report.json; charts and render arrive in M3          [M2]
+tests/                # pytest — ~40 modules, fixtures, AST layering rules
 ```
 
 DESIGN §3.1 shows the full module tree. **It is created per milestone, not up front.** An empty
 package cannot be type-checked or tested, and goes stale before it is filled. M1 added `domain/`
-and `ingest/`, M2 adds `normalize/` and `report/`, and so on.
+and `ingest/`, M2 added `normalize/` and `report/`, M3 adds `report/`'s charts and templates, and
+so on. `report/` holding one module after M2 is ROADMAP M2's stated intent, not an omission.
 
 Two places where the code deliberately differs from the documents, both recorded in
 ROADMAP § Decided during design:
@@ -98,10 +112,16 @@ ROADMAP § Decided during design:
    is that the report and its own provenance line disagree about which tag won.
 10. **No sort under `normalize/` or `report/` may use a partial key** (from M2). `FiscalPeriod`
     compares on `(end, kind)` with `start` excluded, so a stable sort over ties returns payload
-    iteration order — deterministic in practice, not a guarantee, and invisible when wrong.
+    iteration order — deterministic in practice, not a guarantee, and invisible when wrong. The AST
+    rule is blunt: it fails any `sorted`/`min`/`max`/`.sort` with no `key=`, because it cannot tell
+    which sorts are safe. Sorting something already total — a list of dates — is written
+    `key=identity` (`normalize/tags.py`), which states the claim rather than omitting it.
 11. **Nothing under `normalize/` or `report/` reads a clock** (from M2). `as_of` is resolved at the
-    command boundary and threaded down. A `date.today()` in the pipeline makes two runs either side
-    of midnight differ, which the determinism gate reports as a bug that isn't one.
+    command boundary — in the command's body module, next to `cli.py`, which is where `fetch.py` and
+    `facts.py` do it — and threaded down. A `date.today()` in the pipeline makes two runs either side
+    of midnight differ, which the determinism gate reports as a bug that isn't one. Which modules may
+    read one is pinned by `test_layering::test_only_a_command_body_reads_a_clock` rather than listed
+    here, because a list here goes stale the milestone after it is written.
 12. **Determinism is a feature, and it is configured up front** (M3). `SOURCE_DATE_EPOCH`,
     pinned `svg.hashsalt`, `metadata={"Date": None}`, and the LLM response cache keyed on
     `(prompt version, document hash, model id)` so the LLM path is inside the determinism gate

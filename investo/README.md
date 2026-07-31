@@ -6,12 +6,14 @@ Give it a ticker; it pulls the company's audited financials and 10-K/10-Q text f
 runs a deterministic financial model, scans for accounting and governance red flags,
 compares against sector peers, and emits a PDF.
 
-> **Status: ingest built, normalization designed.** `investo fetch` and `investo cache prune`
-> work — EDGAR and price payloads are fetched through a rate-limited choke point, cached
-> immutably, and parsed into typed rows. `analyze`, `facts` and `backtest` parse their full flag
-> surface and report the milestone that implements them. See [DESIGN.md](DESIGN.md) for the
-> architecture, [ROADMAP.md](ROADMAP.md) for the build plan and open questions, and
-> [`docs/`](docs/) for the per-milestone designs.
+> **Status: ingest and normalization built.** `investo fetch`, `investo facts` and
+> `investo cache prune` work — EDGAR and price payloads are fetched through a rate-limited choke
+> point, cached immutably, parsed into typed rows, and normalized into per-metric annual and
+> quarterly series where every figure names the XBRL tag and accession behind it. `investo facts
+> TICKER --json` emits the full `report.json`. `analyze` and `backtest` parse their flag surface
+> and report the milestone that implements them. See [DESIGN.md](DESIGN.md) for the architecture,
+> [ROADMAP.md](ROADMAP.md) for the build plan and open questions, and [`docs/`](docs/) for the
+> per-milestone designs.
 
 ---
 
@@ -73,8 +75,8 @@ what a human skims past, and forcing every assumption to be named and adjustable
 
 ## Quickstart
 
-*(`fetch` and `cache prune` work as of M1. `facts` arrives with M2 and `analyze` with M3 — both
-parse their full flag surface today and report the milestone that implements them.)*
+*(`fetch` and `cache prune` work as of M1, `facts` as of M2. `analyze` arrives with M3 — it parses
+its full flag surface today and reports the milestone that implements it.)*
 
 ```bash
 uv sync
@@ -114,6 +116,7 @@ investo analyze TICKER [options]
   --brief                   2-page summary instead of the full report
 
 investo facts TICKER        print normalized financials + coverage report
+  --json                    write report.json to stdout instead of the table
 investo fetch TICKER        populate cache only
 investo cache prune --older-than 90d
 investo backtest --universe nasdaq100 --start 2015 --horizons 1y,2y,5y

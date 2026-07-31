@@ -1,7 +1,12 @@
 # M2 — Coverage measurement
 
 Status: **not run.** The universe is not yet pinned.
-Last updated: 2026-07-31
+Last updated: 2026-08-01 — **M2's code is complete and this measurement is still outstanding**, which
+is the state [`README.md` § 11](README.md#11-what-landed-and-what-did-not) predicted and records. Two
+consequences worth stating where someone will hit them rather than only in the roadmap: the ≥90%
+criterion is **not met and not assessable**, and the eleven tier-2 chain orderings in
+`normalize/tags.py` are **proposals** until this file has numbers in it. `tests/test_tags.py::test_probe_covers_every_chain_member`
+pins the probe's tag lists against the registry, so the two cannot drift apart while this is pending.
 
 Evidence for ROADMAP M2's first exit criterion — *"≥90% coverage across 20 NASDAQ names on **both**
 the DCF metric set and the quality-score metric set"* — and for
