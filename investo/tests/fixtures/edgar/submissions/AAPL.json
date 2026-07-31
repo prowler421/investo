@@ -1,0 +1,165 @@
+{
+  "cik": "0000320193",
+  "entityType": "operating",
+  "sic": "3571",
+  "sicDescription": "Electronic Computers",
+  "ownerOrg": "06 Technology",
+  "insiderTransactionForOwnerExists": 0,
+  "insiderTransactionForIssuerExists": 1,
+  "name": "Apple Inc.",
+  "tickers": [
+    "AAPL"
+  ],
+  "exchanges": [
+    "Nasdaq"
+  ],
+  "ein": "942404110",
+  "lei": "",
+  "description": "",
+  "website": "",
+  "investorWebsite": "",
+  "category": "Large accelerated filer",
+  "fiscalYearEnd": "0928",
+  "stateOfIncorporation": "CA",
+  "stateOfIncorporationDescription": "CA",
+  "addresses": {
+    "business": {
+      "street1": "One Apple Park Way",
+      "city": "Cupertino",
+      "stateOrCountry": "CA"
+    }
+  },
+  "phone": "(408) 996-1010",
+  "flags": "",
+  "formerNames": [
+    {
+      "name": "APPLE COMPUTER INC",
+      "from": "1994-01-26T00:00:00.000Z",
+      "to": "2007-01-04T00:00:00.000Z"
+    }
+  ],
+  "filings": {
+    "recent": {
+      "accessionNumber": [
+        "0000320193-26-000013",
+        "0000320193-19-000119",
+        "0001140361-26-025622",
+        "0000320193-25-000079",
+        "0000320193-25-000061"
+      ],
+      "filingDate": [
+        "2026-01-30",
+        "2019-10-31",
+        "2026-02-04",
+        "2025-08-01",
+        "2025-05-01"
+      ],
+      "reportDate": [
+        "2025-12-27",
+        "2019-09-28",
+        "2026-02-02",
+        "2025-07-30",
+        "2025-05-01"
+      ],
+      "acceptanceDateTime": [
+        "2026-01-30T18:01:14.000Z",
+        "2019-10-31T18:12:36.000Z",
+        "2026-02-04T21:30:02.000Z",
+        "2025-08-01T20:05:00.000Z",
+        "2025-05-01T20:01:00.000Z"
+      ],
+      "act": [
+        "34",
+        "34",
+        "",
+        "34",
+        "34"
+      ],
+      "form": [
+        "10-Q",
+        "10-K",
+        "4",
+        "8-K",
+        "8-K"
+      ],
+      "fileNumber": [
+        "001-36743",
+        "001-36743",
+        "001-36743",
+        "001-36743",
+        "001-36743"
+      ],
+      "filmNumber": [
+        "26551234",
+        "191181234",
+        "",
+        "251100221",
+        "251090114"
+      ],
+      "items": [
+        "",
+        "",
+        "",
+        "4.02,9.01",
+        "2.02,9.01"
+      ],
+      "core_type": [
+        "10-Q",
+        "10-K",
+        "4",
+        "8-K",
+        "8-K"
+      ],
+      "size": [
+        6612884,
+        12881004,
+        9114,
+        88120,
+        64110
+      ],
+      "isXBRL": [
+        1,
+        1,
+        0,
+        1,
+        1
+      ],
+      "isInlineXBRL": [
+        1,
+        1,
+        0,
+        1,
+        1
+      ],
+      "isXBRLNumeric": [
+        1,
+        1,
+        null,
+        0,
+        0
+      ],
+      "primaryDocument": [
+        "aapl-20251227.htm",
+        "a10-k20199282019.htm",
+        "xslF345X06/ownership.xml",
+        "aapl-20250730.htm",
+        "aapl-20250501.htm"
+      ],
+      "primaryDocDescription": [
+        "10-Q",
+        "10-K",
+        "",
+        "8-K",
+        "8-K"
+      ]
+    },
+    "files": [
+      {
+        "name": "CIK0000320193-submissions-001.json",
+        "filingCount": 1000,
+        "filingFrom": "2015-08-05",
+        "filingTo": "2019-10-30"
+      }
+    ]
+  }
+}

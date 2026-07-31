@@ -1,0 +1,76 @@
+{
+  "fields": [
+    "cik",
+    "name",
+    "ticker",
+    "exchange"
+  ],
+  "data": [
+    [
+      320193,
+      "Apple Inc.",
+      "AAPL",
+      "Nasdaq"
+    ],
+    [
+      1045810,
+      "NVIDIA CORP",
+      "NVDA",
+      "Nasdaq"
+    ],
+    [
+      1652044,
+      "Alphabet Inc.",
+      "GOOGL",
+      "Nasdaq"
+    ],
+    [
+      1652044,
+      "Alphabet Inc.",
+      "GOOG",
+      "Nasdaq"
+    ],
+    [
+      2093536,
+      "Arxis, Inc.",
+      "ARXS",
+      "Nasdaq"
+    ],
+    [
+      19617,
+      "JPMORGAN CHASE & CO",
+      "JPM",
+      "NYSE"
+    ],
+    [
+      36104,
+      "Example Bancorp Inc.",
+      "EXBK",
+      "Nasdaq"
+    ],
+    [
+      1063761,
+      "Example Properties Trust",
+      "EXPT",
+      "Nasdaq"
+    ],
+    [
+      1908259,
+      "Example Newco Inc.",
+      "EXNC",
+      "Nasdaq"
+    ],
+    [
+      1000045,
+      "Example Restated Corp",
+      "EXRS",
+      "Nasdaq"
+    ],
+    [
+      1000046,
+      "Example NoQ4 Industries",
+      "EXNQ",
+      "Nasdaq"
+    ]
+  ]
+}

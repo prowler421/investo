@@ -22,11 +22,13 @@ tests/
 │   ├── edgar/
 │   │   ├── company_tickers_exchange.trimmed.json
 │   │   ├── companyfacts/{AAPL,BANK,REIT,IPO,RESTATER,NOQ4}.trimmed.json
-│   │   ├── submissions/{AAPL.json, AAPL-submissions-001.json, SMALLCAP.json}
-│   │   └── malformed/{short_column.json, bad_accession.json, undeclared_403.txt}
+│   │   ├── submissions/{AAPL.json, AAPL-submissions-001.json, ARXS.json}
+│   │   ├── malformed/{short_column.json, bad_accession.json, undeclared_403.txt}
+│   │   └── PROVENANCE.md            # the trap each fixture carries, and which are synthetic
 │   ├── prices/{tiingo,yfinance,stooq}/AAPL.json|csv
 │   └── typing/                     # snippets that must FAIL basedpyright — see §5
 ├── reduce_fixture.py               # the script that produced every .trimmed.json
+├── make_fixtures.py                # the *synthetic* fixtures, until curation happens
 ├── test_layering.py                # AST rules: choke point, no Metric in ingest, flow direction
 ├── test_fields.py                  # the _fields.py boundary table (04-parsers.md §10.1)
 ├── test_periods.py                 # duration buckets, at their boundaries
@@ -43,6 +45,12 @@ tests/
 ├── test_prices_contract.py         # one test, three adapters
 ├── test_market_cap.py
 ├── test_fetch_command.py           # end-to-end from fixtures; the four exit criteria
+├── test_frames.py                  # M1b: FrameRow is not a RawFact
+├── test_documents.py               # M1b: normalize_text idempotence, item splitting
+├── test_events.py                  # M1b: extraction only, no severity table
+├── test_ownership.py               # M1b: P/S filtering, the 2024-12-18 13D/G boundary
+├── test_proxy.py                   # M1b: ecd iXBRL only, no numbers from narrative
+├── test_finra.py                   # M1b: snapshotting, which is a cache test in disguise
 └── test_typing.py                  # §5
 ```
 

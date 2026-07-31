@@ -313,10 +313,21 @@ def fetch(
     cache_dir: CacheDir = None,
     config_file: ConfigFile = None,
 ) -> None:
-    """Populate the cache for TICKER without producing a report."""
+    """Populate the cache for TICKER without producing a report.
+
+    Exits 0 even when data is missing. A 404 or an untagged metric is an *absence*, printed in the
+    summary's ``absent`` section — whether an absence is fatal depends on what needs it, which is
+    ``analyze``'s question and not this command's (DESIGN.md §14, and docs/m1/README.md §4).
+
+    How far back it fetches comes from ``lookback`` in config, not from a flag: README § Usage
+    documents ``--lookback`` on ``analyze`` and ``facts`` only.
+    """
+    from investo.fetch import render_summary, run_fetch
+
     try:
-        _settings(config_file=config_file, cache_dir=cache_dir)
-        raise NotImplementedYetError.at("M1", f"fetch {ticker}")
+        settings = _settings(config_file=config_file, cache_dir=cache_dir)
+        result = run_fetch(ticker, settings=settings, refresh=refresh)
+        print(render_summary(result))
     except InvestoError as error:
         raise _fail(error) from error
 
@@ -334,11 +345,28 @@ def cache_prune(
     cache_dir: CacheDir = None,
     config_file: ConfigFile = None,
 ) -> None:
-    """Drop cache entries older than a given age."""
+    """Drop cache entries older than a given age.
+
+    Keeps at least one entry per key regardless of age. Pruning the only entry for a key turns the
+    next run into a cold fetch of something the user believes is cached, and pruning the newest while
+    keeping an older one silently reverts the cache to a stale view (docs/m1/02-cache.md §6).
+    """
+    from datetime import UTC, timedelta
+
+    from investo.fetch import open_cache
+
     try:
-        _settings(config_file=config_file, cache_dir=cache_dir)
-        _parse_days(older_than)
-        raise NotImplementedYetError.at("M1", "cache prune")
+        settings = _settings(config_file=config_file, cache_dir=cache_dir)
+        days = _parse_days(older_than)
+        report = open_cache(settings).prune(
+            older_than=timedelta(days=days), now=datetime.now(UTC)
+        )
+        # Printed, because a prune that reports nothing is a prune the user runs twice.
+        print(
+            f"pruned {report.entries_removed} entr{'y' if report.entries_removed == 1 else 'ies'}, "
+            f"kept {report.entries_kept}; removed {report.blobs_removed} blob(s), "
+            f"reclaimed {report.bytes_reclaimed / 1_048_576:.1f} MB"
+        )
     except InvestoError as error:
         raise _fail(error) from error
 

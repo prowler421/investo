@@ -78,6 +78,12 @@ pyrightconfig.json
 .cache/
 cache/
 
+# Full-size payloads fetched for fixture reduction, and the one kept on disk for the
+# `network`-marked parse-time/peak-memory test. Reduced fixtures ARE committed — see
+# tests/reduce_fixture.py and tests/fixtures/edgar/PROVENANCE.md — but a 40 MB companyfacts
+# payload is not, and hand-editing one produces a fixture nobody can regenerate or justify.
+tests/fixtures/_raw/
+
 # Generated reports. `investo analyze` writes report.pdf and report.json here by default.
 reports/
 

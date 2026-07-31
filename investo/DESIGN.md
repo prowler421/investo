@@ -206,23 +206,54 @@ investo/
 
 ### 3.2 Core domain types
 
-Sketch, not final:
+Settled in M1 (`src/investo/domain/`); `FinancialHistory` and `CoverageReport` below remain
+sketches until M2 builds them. Four changes were made to the original sketch while implementing
+M1, each recorded in `docs/m1/01-domain-types.md` and accepted on review 2026-07-31:
+
+- **`SourceRef.taxonomy`** — a bare tag string cannot distinguish
+  `dei:EntityCommonStockSharesOutstanding` from
+  `us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding`, and `Assets` exists in more than
+  one taxonomy. §4.2 requires that distinction and §9.1's appendix prints it.
+- **`Fact.unit`** — §4.2(b) dedups by `(unit, start, end)`, so a fact that does not carry its
+  unit cannot be deduped correctly. It is also what catches the trap §4.2 warns about twice:
+  revenue excluding vs. including assessed tax are different numbers, and EPS arrives under
+  `USD/shares`.
+- **`Derivation`, and `Fact.source: Provenance`** — a single `SourceRef` cannot describe a
+  number computed from several facts, and §4.2(c) requires `Q4 = FY − (Q1+Q2+Q3)` immediately.
+  Market cap in M1 already needs it. The tempting fallback — printing a derived number with one
+  of its inputs' refs — is worse than printing nothing, because it looks traced.
+- **`accession` is an `Accession` value type**, not a `str`. The number appears in three
+  spellings and §4.1 makes the transforms the client's responsibility; a value type gives them
+  one home and one test. It exposes **no `cik` property**: the leading ten digits are the CIK of
+  the *submitting* entity, which for most companies is a filer agent, so a rule that reads the
+  company CIK off an accession is right on some filings and yields a nonexistent CIK on others.
 
 ```python
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class SourceRef:
-    accession: str          # "0000320193-25-000079"
+    accession: Accession    # canonically dashed; no `cik` property, deliberately
+    taxonomy: str | None    # "us-gaap" | "dei" | "srt" | "ffd" | None for non-XBRL
     tag: str | None         # "RevenueFromContractWithCustomer..."
-    form: str               # "10-K"
+    form: str               # "10-K"; not restricted to periodic reports
     filed: date
     url: str
-    fetched_at: datetime
+    fetched_at: datetime    # tz-aware UTC, always
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
+class Derivation:
+    rule: str                       # "market_cap", "q4_from_annual_minus_quarters"
+    inputs: tuple[Provenance, ...]  # recursive: a derived margin over a stitched series
+    note: str | None = None         # e.g. "classes: GOOGL, GOOG" (§5.4 requires this)
+
+type Provenance = SourceRef | Derivation
+
+@dataclass(frozen=True, slots=True)
 class Fact:
+    metric: Metric
     value: Decimal
     period: FiscalPeriod
-    source: SourceRef
+    source: Provenance      # a filing, or a rule over several
+    unit: str
 
 @dataclass(frozen=True)
 class FinancialHistory:
@@ -235,9 +266,19 @@ class FinancialHistory:
     as_of: date                      # no fact with filed > as_of is included
 ```
 
-**Every number in the final PDF traces back to a `SourceRef`.** If it can't, it doesn't
-get printed. This is the mechanism that keeps the report auditable and makes the LLM
-unable to smuggle in an unsourced claim.
+**Every number in the final PDF traces back to a `SourceRef` — directly, or through a
+`Derivation` whose inputs do.** If it can't, it doesn't get printed. This is the mechanism that
+keeps the report auditable and makes the LLM unable to smuggle in an unsourced claim.
+
+`fetched_at` is displayed and it participates in `cache prune`. **Nothing downstream may read it
+arithmetically**: a figure whose value depended on when it was fetched would make §11's
+byte-identical-output gate unsatisfiable.
+
+Two guarantees in this layer are enforced by the type checker rather than at runtime, because at
+runtime both sides are the same object — which is the whole reason `NewType` was chosen. §5.4's
+`CoverShares`/`DilutedShares` distinction is the important one; `FrameRow` not being a `RawFact`
+is the other. Their violation tests live in `tests/fixtures/typing/` and
+`tests/test_typing.py`.
 
 ---
 
@@ -687,8 +728,24 @@ Caveat to surface: SIC codes are coarse and sometimes miscategorize. Allow
 ### 6.6 8-K event monitoring
 
 The highest value per line of code anywhere in the system. 8-K items are **coded**, so
-detection is a filter on `filings.recent.items` from the submissions API — no NLP required —
-and several of these are the loudest signals available anywhere in public filings.
+detection is a filter on the submissions API's `items` column — no NLP required — and several of
+these are the loudest signals available anywhere in public filings.
+
+**`filings.recent` is not the company's whole filing history, and the parser must paginate.**
+SEC's documentation: the path holds *"at least one year's of filing or to 1,000 (whichever is
+more) of the most recent filings"*, and *"if the entity has additional filings, `files` will
+contain an array of additional JSON files and the date range for the filings each one
+contains."* Confirmed on Apple itself — its overflow page `CIK0000320193-submissions-001.json`
+returns 200 and its newest accessions are from **2015**, so a 10y lookback on the flagship ticker
+reads an incomplete history without pagination. For a filer with heavy Form 4 traffic, 1,000
+filings can be under three years, so a 5y window puts older 8-Ks in the overflow and a
+`recent`-only filter finds nothing wrong with a company that filed a 4.02 four years ago. Since
+4.02 is the loudest signal in this table, that is not a detail.
+
+`submissions.py` therefore concatenates `recent` with every `files[]` page whose range intersects
+the requested window, at a cost of one to three extra requests per company. The overflow page is
+a **different shape** — flat columnar arrays with no `filings` wrapper and no company metadata —
+so it has its own parse function. Recorded as spec question 1 in `docs/m1/README.md`.
 
 | Item | Official title | Why it matters |
 |---|---|---|
@@ -1007,6 +1064,14 @@ chart. Without all of this the §11 determinism gate fails on day one.
 10. **Appendix** — full financial tables, tag provenance per metric, config used, prompt
     versions, cache manifest hash.
 
+The cache manifest hash is over **the entries this run used**, sorted — `sha256` of the
+`(key, content_sha256)` pairs — not over the whole manifest file. Hashing the file would make the
+hash printed in an AAPL report change when someone fetches MSFT, so §11's byte-identical-output
+gate would fail for a reason that has nothing to do with the report. Hashing the entries used makes
+the value answer the question an appendix reader is actually asking: *did this report see the same
+data as that one?* — and it makes a cold run and the warm run after it agree. Recorded as spec
+questions 4 and 10 in `docs/m1/README.md`.
+
 Section 9 is not boilerplate. It's where the report earns trust, and it should be written
 to be read.
 
@@ -1071,8 +1136,8 @@ machine.
 
 | Layer | Approach |
 |---|---|
-| Normalize | Golden fixtures: real `companyfacts` JSON for ~15 companies with known-hard cases (Apple's ASC 606 stitch, a bank, a REIT, a recent IPO, a restater, a Q4-less filer). Assert exact expected series. |
-| EDGAR client | Rate-limiter unit tests; `responses`-mocked retries; one opt-in live smoke test. |
+| Normalize | Golden fixtures: real `companyfacts` JSON for ~15 companies with known-hard cases (Apple's ASC 606 stitch, a bank, a REIT, a recent IPO, a restater, a Q4-less filer). Assert exact expected series. Reduced by the checked-in `tests/reduce_fixture.py` rather than hand-edited, so a reviewer can ask why a fixture contains what it does. Provenance and the synthetic/real status of each is recorded in `tests/fixtures/edgar/PROVENANCE.md`. |
+| EDGAR client | Rate-limiter unit tests with an **injected clock**; **`respx`**-mocked retries; one opt-in live smoke test. (`respx`, not `responses` — `responses` patches `requests` and cannot mock httpx. Spec question 3, a tooling correction rather than a design change.) |
 | Forecast | Synthetic series with known CAGR → assert recovery within tolerance. Interval width must scale ≈√h (the local-level-with-drift prior, §5.2), not merely increase — monotonic widening is a near-vacuous assertion that a badly miscalibrated interval passes. Reinvestment-consistency and `g < WACC` constraints tested at their boundaries. |
 | Quality scores | Hand-computed fixtures from real filings, cross-checked against a published screener. **Not** "worked examples from the original papers" — Piotroski (2000), Altman (1968) and Beneish (1999) are portfolio-sort and discriminant-function studies; none contains a per-firm step-by-step computation to copy. |
 | Flags | One test per rule, positive and negative. |

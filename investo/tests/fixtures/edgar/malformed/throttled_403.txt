@@ -1,0 +1,4 @@
+Request Rate Threshold Exceeded
+
+Your request rate has exceeded the SEC's threshold. Please reduce your request rate and try
+again in ten minutes.

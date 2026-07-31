@@ -15,12 +15,10 @@ classifiers = [
     "Topic :: Office/Business :: Financial :: Investment",
 ]
 
-# M0 runtime dependencies only: the CLI shell and the config layer.
-#
-# The heavy ones arrive with the milestone that needs them, not now — httpx in M1, matplotlib
-# / jinja2 / weasyprint in M3, statsmodels / numpy in M5. Declaring them early means every
-# `uv sync` pays for a package nothing imports, and a pin nobody has exercised drifts out of
-# date before its first use.
+# Runtime dependencies through M1. The rest arrive with the milestone that imports them —
+# matplotlib / jinja2 / weasyprint in M3, statsmodels / numpy in M5. Declaring them early means
+# every `uv sync` pays for a package nothing imports, and a pin nobody has exercised drifts out
+# of date before its first use.
 dependencies = [
     "typer>=0.19,<0.20",
     # Pinned even though typer already requires it. typer 0.19 declares `click>=8.0.0` with no
@@ -30,7 +28,27 @@ dependencies = [
     "click>=8.2.1,<8.4",
     "pydantic>=2.11,<3",
     "pydantic-settings>=2.11,<3",
+    # M1a. 0.28.1 is the current stable; 1.0 is still at `1.0.dev2` and unreleased. The `<0.29`
+    # ceiling because a 0.x minor is a breaking change by convention.
+    "httpx>=0.28,<0.29",
+    # M1b. iXBRL extraction from DEF 14A (DESIGN.md §6.9) and text extraction from filing bodies.
+    # Form 4 and 13D/G are plain XML and use `xml.etree.ElementTree` from the stdlib, so this is
+    # the proxy/document path only.
+    "lxml>=5,<7",
 ]
+
+# yfinance is an *extra*, not a dependency — docs/m1/README.md § Why yfinance is an extra, and
+# spec question 8. DESIGN.md §4.3 calls it dev convenience only, notes its own README describes
+# it as intended for personal use, and concludes it is not a defensible base for anything shared
+# or commercial. A default dependency contradicts all three: it puts a scraper and its
+# TLS-impersonation chain into every install, including one made by someone who set
+# `price_provider = "tiingo"` and will never import it. The adapter ships; the dependency is
+# opt-in, and `yfinance_.py` imports lazily with a ConfigError naming this extra.
+#
+# `>=1.4` because curl_cffi became optional with a `requests` fallback at 1.4.0; `<2` because the
+# data source has no contract and a major bump is where that shows up.
+[project.optional-dependencies]
+yfinance = ["yfinance>=1.4,<2"]
 
 [project.scripts]
 investo = "investo.cli:app"
@@ -51,6 +69,10 @@ dev = [
     "ruff>=0.16,<0.17",
     "basedpyright>=1.39,<2",
     "pre-commit>=4.0",
+    # httpx mocking. DESIGN.md §11 prescribes `responses`, which patches `requests` and cannot
+    # mock httpx — spec question 3, a tooling correction rather than a design change. respx 0.22
+    # requires httpx >=0.25, which the pin above satisfies.
+    "respx>=0.22,<0.23",
 ]
 
 [build-system]
@@ -120,7 +142,12 @@ skip-magic-trailing-comma = false
 pythonVersion = "3.13"
 typeCheckingMode = "strict"
 include = ["src", "tests"]
-exclude = ["**/__pycache__", ".venv"]
+# `tests/fixtures/typing` is excluded because every file in it is *supposed* to fail. They are the
+# violation tests for the two guarantees that cannot be checked at runtime — DESIGN.md §5.4's
+# distinct share-count types, and `Accession` exposing no CIK — and `test_typing.py` runs
+# basedpyright over that directory itself and asserts each file errors. Without this exclusion,
+# `make typecheck` fails on files whose whole purpose is to fail.
+exclude = ["**/__pycache__", ".venv", "tests/fixtures/typing"]
 reportMissingTypeStubs = false
 
 # BasedPyright's own additions on top of pyright's strict set. `strict` already leaves all four
@@ -146,10 +173,16 @@ reportUnusedParameter = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-addopts = "-q --strict-markers"
+# `-m "not network"` so `make test` and CI both skip the live tests without anyone remembering to.
+# Since CI sets no INVESTO_* variables (CLAUDE.md convention 7), a network test that leaked into
+# the default selection would *fail* rather than quietly pass — which is the behaviour convention 7
+# exists to produce, and the reason the deselection is here rather than in the Makefile.
+addopts = "-q --strict-markers -m 'not network'"
 markers = [
     "spec: asserts a rule stated normatively in DESIGN.md or ROADMAP.md",
     "surface: asserts the CLI's documented flag surface, per README.md § Usage",
+    "network: reaches the real internet; deselected by default, needs INVESTO_SEC_USER_AGENT",
+    "typing: runs basedpyright over a snippet and asserts the diagnostic",
 ]
 
 # ---------------------------------------------------------------------------
@@ -168,8 +201,17 @@ exclude_lines = [
     "raise NotImplementedError",
 ]
 
-# No `fail_under` yet, deliberately. A floor is a claim that coverage has not collapsed, and
-# it can only be set from a measurement. M0's codebase is a CLI shell whose command bodies are
-# unimplemented by design; a number picked here would be picked to match whatever today's run
-# scores, which is how a gate comes to mean nothing. Set it in M1 from a measured figure, and
-# record that figure in the commit message.
+# `fail_under` is still unset, and this is the one M1 commitment not yet honoured — deliberately,
+# because honouring it wrongly is worse than late.
+#
+# docs/m1/06-testing.md §7 specifies the procedure: run `make coverage` once M1 is green, set
+# `fail_under` to the measured total **rounded down to the nearest 5**, and put the measured figure
+# in the commit message so the next person can tell whether coverage moved or the floor did.
+# Rounded down rather than exact, because a floor equal to the measurement fails on any refactor
+# that removes a covered line, and a gate that fires on non-events gets raised past the point of
+# meaning.
+#
+# It is not set here because the measurement has not been taken: the environment this milestone was
+# written in cannot reach PyPI, so httpx and respx are not installed and the suite has not run. A
+# number invented to look plausible is exactly the gate-that-means-nothing this comment has warned
+# against since M0. Run `make coverage` and set it.

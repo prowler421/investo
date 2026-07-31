@@ -18,9 +18,11 @@ __all__ = [
     "ExitCode",
     "InvestoError",
     "ConfigError",
+    "UndeclaredUserAgentError",
     "TickerNotFoundError",
     "InsufficientDataError",
     "UpstreamFetchError",
+    "SecThrottledError",
     "NotImplementedYetError",
 ]
 
@@ -108,6 +110,30 @@ class ConfigError(InvestoError):
     exit_code = ExitCode.CONFIG_ERROR
 
 
+class UndeclaredUserAgentError(ConfigError):
+    """SEC rejected the request as an undeclared automated tool. Exit 5, and never retried.
+
+    SEC returns 403 both for a missing or unacceptable ``User-Agent`` and for rate-limit
+    rejection, so the two are distinguished by the response body
+    (``ingest/edgar/client.py``). They need opposite handling: retrying an undeclared-tool 403
+    cannot succeed and does burn the rate budget, and DESIGN.md §4.1 notes the penalty for being
+    too fast is not only ours to pay.
+
+    ``ConfigError`` rather than ``UpstreamFetchError`` because exit 5 carries the true statement
+    about where the run stopped — the configuration was wrong and nothing was fetched — which
+    exit 4's "upstream fetch failure after retries" would not.
+
+    Not strictly necessary as a distinct class; ``ConfigError`` would exit the same. It exists so
+    a test can assert *which* condition fired rather than only which code, and "an undeclared-tool
+    403 is never retried" is a guarantee about the condition.
+    """
+
+    exit_code = ExitCode.CONFIG_ERROR
+    """Declared, not inherited. CLAUDE.md convention 1 requires every error class to state its
+    own code, and ``tests/test_errors.py`` enforces it with ``"exit_code" in vars(cls)``, which
+    an inherited attribute does not satisfy."""
+
+
 class TickerNotFoundError(InvestoError):
     """Ticker is unknown to EDGAR, or is not NASDAQ-listed. Exit 2."""
 
@@ -128,6 +154,30 @@ class UpstreamFetchError(InvestoError):
     """An upstream source failed after retries were exhausted. Exit 4."""
 
     exit_code = ExitCode.UPSTREAM_FETCH_FAILURE
+
+
+class SecThrottledError(UpstreamFetchError):
+    """SEC throttled us and the retries ran out. Exit 4.
+
+    The message names the request count and the elapsed time, because the useful next action
+    after a throttle is to wait, and DESIGN.md §4.1 records that the threshold clears after ten
+    minutes below the rate.
+    """
+
+    exit_code = ExitCode.UPSTREAM_FETCH_FAILURE
+    """Declared, not inherited — see :class:`UndeclaredUserAgentError`."""
+
+    @classmethod
+    def after(cls, *, requests: int, elapsed: float) -> SecThrottledError:
+        """Build the error, naming what the user needs in order to decide to wait."""
+        return cls(
+            f"SEC throttled this run after {requests} request(s) over {elapsed:.1f}s.",
+            hint=(
+                "SEC's cap is 10 req/s and the throttle clears once your traffic stays under it "
+                "for about ten minutes (DESIGN.md §4.1). Wait, then re-run — the cache keeps "
+                "everything already fetched, so the retry is cheap."
+            ),
+        )
 
 
 class NotImplementedYetError(InvestoError):
