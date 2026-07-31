@@ -1,0 +1,88 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+sdist/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Environments
+.env
+.env.*
+!.env.example
+.venv
+env/
+venv/
+ENV/
+
+# Type checkers and linters
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+pyrightconfig.json
+
+# Editors
+.vscode/
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+.history/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ---------------------------------------------------------------------------
+# Investo-specific
+# ---------------------------------------------------------------------------
+
+# The raw-payload cache. Content-addressed and append-only (DESIGN.md §4.4), so it is
+# reproducible by refetching and has no business in version control — a warm cache for a
+# handful of tickers runs to hundreds of megabytes of EDGAR JSON.
+#
+# It is ignored rather than absent from the tree on purpose: `investo fetch` recreates it, and
+# a committed cache would freeze `fetched_at` timestamps that provenance treats as meaningful.
+.cache/
+cache/
+
+# Generated reports. `investo analyze` writes report.pdf and report.json here by default.
+reports/
+
+# Local config. The TOML config file is per-machine — it carries a User-Agent with a real
+# contact email in it (DESIGN.md §4.1), which is exactly the kind of thing that should not be
+# committed on someone else's behalf.
+investo.toml
+!tests/**/investo.toml

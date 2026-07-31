@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "//": "`uv add` is deliberately absent. Investo's dependency set arrives per milestone (M1 httpx, M3 matplotlib/weasyprint, M5 statsmodels), so adding one early is a decision that should require an explicit prompt rather than a pre-approval.",
+  "permissions": {
+    "allow": [
+      "Bash(uv sync:*)",
+      "Bash(uv run:*)",
+      "Bash(uv lock:*)",
+      "Bash(uv build:*)",
+      "Bash(make:*)",
+      "Bash(ruff:*)",
+      "Bash(basedpyright:*)",
+      "Bash(pytest:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./investo.toml)"
+    ]
+  }
+}

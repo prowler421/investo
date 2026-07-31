@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege: this workflow only reads the repository.
+permissions:
+  contents: read
+
+jobs:
+  # These steps are `make check` split up so a failure names itself in the UI. Keep the two in
+  # step: `make check` runs lint, format check, typecheck, test — in that order.
+  check:
+    name: lint · format · typecheck · test
+    runs-on: ubuntu-latest
+    # No INVESTO_* variables are set here, deliberately. The suite clears them anyway
+    # (tests/conftest.py), and a User-Agent in CI would mean a test that reaches sec.gov could
+    # do so without anyone noticing. M0 makes no network calls; M1 should keep CI that way.
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Set up Python 3.13
+        run: uv python install 3.13
+
+      - name: Sync dependencies
+        run: uv sync --frozen
+
+      - name: Lint (Ruff)
+        run: uv run ruff check src tests
+
+      - name: Format check (Ruff)
+        run: uv run ruff format --check src tests
+
+      - name: Type check (BasedPyright)
+        run: uv run basedpyright
+
+      - name: Test with coverage
+        run: uv run pytest --cov=investo --cov-report=term-missing --cov-report=xml
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          if-no-files-found: ignore

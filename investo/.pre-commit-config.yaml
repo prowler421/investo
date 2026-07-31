@@ -1,0 +1,45 @@
+# Pre-commit hooks for investo.
+# Install once with `uv run pre-commit install` (or `make install`).
+# Ruff and BasedPyright run through the local uv environment so versions match uv.lock.
+# Hooks mirror a subset of `make check`: lint, format, typecheck — not pytest.
+minimum_pre_commit_version: "4.0.0"
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        # Two trailing spaces are a hard line break in Markdown, and DESIGN.md uses them.
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+      # A committed .env would carry a real contact email, and DESIGN.md §4.1 makes that
+      # variable required — so the pressure to commit it is real, and .gitignore alone only
+      # helps until someone runs `git add -f`.
+      - id: detect-private-key
+
+  - repo: local
+    hooks:
+      - id: lint
+        name: lint (ruff check)
+        entry: uv run ruff check --fix src tests
+        language: system
+        types: [python]
+        require_serial: true
+      - id: ruff-format
+        name: ruff (format)
+        entry: uv run ruff format
+        language: system
+        types: [python]
+        require_serial: true
+      - id: basedpyright
+        name: basedpyright (typecheck)
+        entry: uv run basedpyright
+        language: system
+        types: [python]
+        pass_filenames: false
+        require_serial: true
