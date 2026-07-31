@@ -5,8 +5,15 @@ Guidance for Claude Code (and other AI assistants) contributing to **investo**.
 ## What this project is
 
 Investo turns a NASDAQ ticker into a fundamental due-diligence PDF built from SEC filings. It
-is currently at **M0** — the CLI shell, the config layer and the exit-code taxonomy. No data is
-fetched, normalized, analyzed or rendered yet.
+is currently at **M1 built, M2 designed**. `investo fetch TICKER` and `investo cache prune` work:
+EDGAR and price payloads are fetched through a rate-limited choke point, cached immutably, and
+parsed into typed rows keyed by XBRL tag. Nothing is normalized, analyzed or rendered yet —
+`analyze`, `facts` and `backtest` parse their full flag surface and exit 70 naming the milestone
+that fills them in.
+
+M2's design is in [`docs/m2/`](docs/m2/README.md) and its seventeen spec questions were accepted on
+review; the decisions are in DESIGN §3.2, §4.2, §4.2.1, §4.5, §11 and ROADMAP § Decided during
+design. Read `docs/m2/README.md` before touching `normalize/`.
 
 `DESIGN.md` is **normative** on architecture and data handling; `ROADMAP.md` is normative on
 sequencing and scope. On any conflict between those documents and a comment or docstring in the
@@ -28,17 +35,24 @@ them:
 
 ```
 src/investo/
-├── __init__.py       # package docstring; re-exports the three modules
-├── __main__.py       # `python -m investo`
-├── cli.py            # typer app — every documented command and flag, stub bodies
-├── config.py         # pydantic-settings: TOML + env, INVESTO_ prefix
-└── errors.py         # ExitCode (DESIGN §14) + the exception hierarchy
-tests/                # pytest — config resolution, exit codes, CLI surface
+├── cli.py            # typer app — every documented command and flag        [M0]
+├── config.py         # pydantic-settings: TOML + env, INVESTO_ prefix       [M0]
+├── errors.py         # ExitCode (DESIGN §14) + the exception hierarchy      [M0]
+├── fetch.py          # `investo fetch` orchestration, summary, absences     [M1]
+├── domain/           # models, periods, provenance — frozen, zero I/O       [M1]
+├── ingest/
+│   ├── cache.py      # content-addressed, append-only, manifest hash        [M1]
+│   ├── edgar/        # client (the only sec.gov caller) + 9 parsers         [M1]
+│   ├── finra.py      # short interest, snapshotted                          [M1]
+│   └── prices/       # protocol + tiingo / yfinance / stooq                 [M1]
+├── normalize/        # tags, facts, statements                              [M2 — not built]
+└── report/           # serialize.py; charts and render arrive in M3         [M2 — not built]
+tests/                # pytest — ~30 modules, fixtures, AST layering rules
 ```
 
 DESIGN §3.1 shows the full module tree. **It is created per milestone, not up front.** An empty
-package cannot be type-checked or tested, and goes stale before it is filled. M1 adds
-`domain/` and `ingest/`, M2 `normalize/`, and so on.
+package cannot be type-checked or tested, and goes stale before it is filled. M1 added `domain/`
+and `ingest/`, M2 adds `normalize/` and `report/`, and so on.
 
 Two places where the code deliberately differs from the documents, both recorded in
 ROADMAP § Decided during design:
@@ -74,11 +88,25 @@ ROADMAP § Decided during design:
 7. **CI sets no `INVESTO_*` variables.** A test that reaches the network should fail rather
    than quietly succeed. Keep it that way when M1 adds an HTTP client — use recorded fixtures.
 8. **`Decimal` for money, never `float`.** Applies from M1, when the first financial figure is
-   parsed.
-9. **Determinism is a feature, and it is configured up front** (M3). `SOURCE_DATE_EPOCH`,
-   pinned `svg.hashsalt`, `metadata={"Date": None}`, and the LLM response cache keyed on
-   `(prompt version, document hash, model id)` so the LLM path is inside the determinism gate
-   rather than exempt from it. Two runs must produce a byte-identical PDF.
+   parsed. From M2 an AST test forbids constructing a `float` anywhere under `normalize/` or
+   `report/`, and `report.json` emits values as **JSON strings**: a JSON number is an IEEE double
+   to most parsers, and a round-trip test with `parse_float=Decimal` passes either way, so the
+   assertion is on the quoting in the serialized bytes.
+9. **`normalize/tags.py` is the only module that may contain a `us-gaap` literal** (from M2),
+   widening M1's `ingest/` rule to the whole package with a one-key allowlist. A tag literal
+   anywhere else is the first line of a shadow tag table, and the failure mode of two tag tables
+   is that the report and its own provenance line disagree about which tag won.
+10. **No sort under `normalize/` or `report/` may use a partial key** (from M2). `FiscalPeriod`
+    compares on `(end, kind)` with `start` excluded, so a stable sort over ties returns payload
+    iteration order — deterministic in practice, not a guarantee, and invisible when wrong.
+11. **Nothing under `normalize/` or `report/` reads a clock** (from M2). `as_of` is resolved at the
+    command boundary and threaded down. A `date.today()` in the pipeline makes two runs either side
+    of midnight differ, which the determinism gate reports as a bug that isn't one.
+12. **Determinism is a feature, and it is configured up front** (M3). `SOURCE_DATE_EPOCH`,
+    pinned `svg.hashsalt`, `metadata={"Date": None}`, and the LLM response cache keyed on
+    `(prompt version, document hash, model id)` so the LLM path is inside the determinism gate
+    rather than exempt from it. Two runs must produce a byte-identical PDF. `report.json` is
+    already under the gate from M2.
 
 ## Coding standards
 
@@ -123,4 +151,6 @@ in the code that diverges from DESIGN.md is a spec question — raise it.
 - [ ] Tests added, with the right marker, asserting derivations and boundaries.
 - [ ] Every new guarantee has a test that performs the violation it forbids.
 - [ ] No new dependency without the milestone that needs it.
+- [ ] No `us-gaap` literal outside `normalize/tags.py`; no clock read, `float`, or keyless sort
+      under `normalize/` or `report/`.
 - [ ] `make check` passes.

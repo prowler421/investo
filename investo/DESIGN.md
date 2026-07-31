@@ -206,9 +206,10 @@ investo/
 
 ### 3.2 Core domain types
 
-Settled in M1 (`src/investo/domain/`); `FinancialHistory` and `CoverageReport` below remain
-sketches until M2 builds them. Four changes were made to the original sketch while implementing
-M1, each recorded in `docs/m1/01-domain-types.md` and accepted on review 2026-07-31:
+Settled in M1 (`src/investo/domain/`); `FinancialHistory` and `CoverageReport` are settled in M2
+(`src/investo/normalize/`), designed in `docs/m2/03-statements.md` and accepted on review
+2026-07-31. Four changes were made to the original sketch while implementing M1, each recorded in
+`docs/m1/01-domain-types.md` and accepted on review 2026-07-31:
 
 - **`SourceRef.taxonomy`** — a bare tag string cannot distinguish
   `dei:EntityCommonStockSharesOutstanding` from
@@ -255,16 +256,53 @@ class Fact:
     source: Provenance      # a filing, or a rule over several
     unit: str
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class FinancialHistory:
     cik: int
     ticker: str
-    fiscal_year_end: str            # "MMDD"
-    annual: dict[Metric, list[Fact]]
-    quarterly: dict[Metric, list[Fact]]
-    coverage: CoverageReport         # which metrics, which tag won, % filled
-    as_of: date                      # no fact with filed > as_of is included
+    fiscal_year_end: str | None                 # "MMDD"; None if submissions was absent
+    annual: Mapping[Metric, tuple[Fact, ...]]
+    quarterly: Mapping[Metric, tuple[Fact, ...]]
+    coverage: CoverageReport                    # per metric: tags used, filled/expected, drops
+    as_of: date                                 # no fact with filed > as_of is included
+    name: str                                   # display name, from submissions
+    sic: int | None
+    sic_description: str | None
+    window: tuple[date, date]
+    quarters_available: int
+    restatements: tuple[Restatement, ...]
+    market_cap: tuple[Money, Derivation] | None = None
 ```
+
+Five changes from the M1-era sketch, made in M2 and recorded in `docs/m2/README.md` spec question
+3. `Mapping`/`tuple` rather than `dict`/`list`, because a frozen dataclass holding a mutable dict
+is frozen in name only and §11's gate needs the series unable to change between build and
+serialize. `name`, `sic` and `sic_description` because three separate consumers read the SIC —
+§6.10's refusal, §6.1's Altman variant, §6.5's cohort — and threading it separately is how one of
+them ends up with a different value. `window` and `quarters_available` because §5.1 gates on
+history length at two thresholds and §6.4 flags a truncated lookback. `restatements` because
+open question 10 is unanswerable later if M2 discards the superseded values. `market_cap` because
+it is M1's and has no series to live in.
+
+**`CoverageReport` is per-metric with tier aggregates, not one number** — ROADMAP M2's exit
+criterion is stated per tier, and a single figure hides a tier-2 failure behind tier-1 success.
+Its denominator is a **period spine** built from the filing history (`report_date` on 10-K/10-Q,
+amendments collapsed, annual report dates counted as quarterly ends too), with a labelled
+`OBSERVED` fallback where a filer has no periodic filing in the window. "% filled" against an
+unstated denominator is not a measurement: the three naive readings measure company age, or are
+circular, or differ by more than the 90% criterion's own margin. `docs/m2/03-statements.md` §2.
+
+**Run metadata is not on this type.** The cache manifest hash, config and prompt versions belong
+to `report.json`'s envelope (§4.5); two histories built from the same facts must compare equal.
+
+**A `FinancialHistory` is produced even when there are no facts to put in it.** `companyfacts` and
+`submissions` are each independently absent for real filers — a 404 on either is an absence under
+§14, not a failure — so the builder accepts both as optional and returns an empty history with the
+gap recorded in the coverage report rather than raising. §6.10's argument applies here too: a blank
+space with an explanation beats a confident wrong number, and a traceback is neither. `cik` and the
+display name therefore come from the resolved ticker row rather than from the profile, so a
+submissions 404 does not lose the company's identity, and `fiscal_year_end` is `str | None` because
+there is no honest value to invent when the payload that carries it is missing.
 
 **Every number in the final PDF traces back to a `SourceRef` — directly, or through a
 `Derivation` whose inputs do.** If it can't, it doesn't get printed. This is the mechanism that
@@ -360,6 +398,23 @@ quarterly 80–100; ~180d/~270d is YTD — difference it or drop it. And **discr
 often never tagged**: derive `Q4 = FY − (Q1+Q2+Q3)`, and don't assume either behavior,
 since it varies by issuer *and* by year within the same issuer.
 
+Settled in M2 (`docs/m2/02-facts.md`). **YTD is differenced only where it recovers a period the
+filer did not report discretely**, never carried into a series as-is, and dropped as redundant
+otherwise — a filer's discrete and cumulative figures differ routinely by intra-period
+reclassifications, so a reconciliation flag would fire on most filers and mean nothing. **`OTHER`
+is dropped and counted per metric**, because a filer whose facts are 40% `OTHER` has had a
+fiscal-year change, which is a §6.4 finding rather than an ingestion detail. Q4 derivation and YTD
+differencing are **one rule** — subtract a set of shorter periods tiling the front of a longer one
+— gated on five guards, of which the load-bearing one is that the residual must itself classify as
+`QUARTER`. Without it, a year missing its Q2 yields a ~180-day figure emitted as Q4. Nothing is
+derived from a derived part.
+
+The narrow bands are deliberate against SEC's own frames tolerance (365 ± 30 and 91 ± 30): they
+refuse an ambiguous duration rather than mislabelling it, and a 61-day period admitted as a quarter
+is a two-month stub charted as a quarter of revenue. A 53-week year is 371 days and falls inside
+`ANNUAL` without a special case. The per-metric `OTHER` count is what makes the cost of the narrow
+bands measurable rather than assumed.
+
 **Tag fallback chains.** No single tag covers a majority of filers. Measured entity counts
 from the CY2025Q1 frames API:
 
@@ -370,7 +425,7 @@ from the CY2025Q1 frames API:
 | Gross profit | `GrossProfit` (2,023) | Often absent; derive from revenue − COGS. |
 | Operating income | `OperatingIncomeLoss` | Many financials/REITs have no operating-income line at all. |
 | Total assets | `Assets` (5,633) | Reliable. |
-| Total liabilities | `Liabilities` (4,998) → derive `LiabilitiesAndStockholdersEquity − StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest` | ~11% of filers reporting `Assets` never tag `Liabilities`. |
+| Total liabilities | `Liabilities` (4,998) → derive `LiabilitiesAndStockholdersEquity − StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest` | ~11% of filers reporting `Assets` never tag `Liabilities`. **The subtrahend is the including-NCI tag, not `Metric.EQUITY`** — see below. |
 | Equity | `StockholdersEquity` (5,452) | Parent-only; pair with `NetIncomeLoss` for consistency. |
 | Cash | `CashAndCashEquivalentsAtCarryingValue` (4,508) vs `CashCashEquivalentsRestrictedCash...` | The latter includes restricted cash and is what ties to the CF statement. Different numbers. |
 | Operating cash flow | `NetCashProvidedByUsedInOperatingActivities` (4,784) → `...ContinuingOperations` (205) | Fallback is rare but the only tag for some filers with discontinued ops. |
@@ -389,6 +444,73 @@ fragmented as capex: `AssetsCurrent`, `LiabilitiesCurrent`,
 `ShareBasedCompensation`, `OperatingLeaseLiabilityNoncurrent`, and share-issuance proceeds.
 Beneish additionally needs the prior year of all eight of its ratios, so it requires one
 more year of history than the nominal lookback.
+
+**Tier 2's chain *orderings* are deliberately not written here yet.** `docs/m2/01-tags.md` §4
+proposes a fallback order for each, but unlike tier 1 — whose entity counts above are measured —
+those orderings are guesses, and writing a guess into a normative document makes it normative by
+having been written down. They are provisional until the coverage measurement
+(`docs/m2/05-testing.md` §3) confirms them against a frames pull, and they land here in the same
+commit as `docs/m2/COVERAGE.md`.
+
+### 4.2.1 Resolution, and what a chain declares besides its tag order
+
+Settled in M2 and designed in `docs/m2/01-tags.md`. Each was absent from the table above, and the
+table is unusable without them.
+
+**Resolution is period-wise, not series-level.** "First match wins" above does not say at what
+granularity, and the two readings disagree on every filer with a long history. Walking the chain
+once and using that tag for the whole series resolves Apple to the ASC 606 tag — which Apple did
+not use before FY2018 — losing two of four annual revenue periods *and reporting full coverage on
+the two it keeps*, because from the resolver's view nothing is missing. Resolving each period
+independently makes the ASC 606 stitch structural rather than a special case keyed on 2018, and
+makes the tag chosen for a period independent of `--lookback`; a series-level primary would make
+the same fiscal year resolve differently at 5y and 10y, and §9.1's appendix would print two
+answers for one fact.
+
+**Mutually incompatible members are declared in exclusivity groups.** Period-wise resolution can
+otherwise alternate between excluding- and including-assessed-tax revenue from quarter to quarter,
+and the resulting step change is a tagging artifact presented as growth. At most one member of a
+group contributes to a series. `SalesRevenueNet` is deliberately *not* in that group: the stitch
+is a temporal substitution across a standards boundary, and the assessed-tax pair is a
+definitional substitution within one standard.
+
+That distinction generalizes, and it has to, or the group rule reintroduces the hole it was added
+to close. A filer that switches between two members **permanently** — a new tax nexus makes
+assessed taxes material — is not flip-flopping, and collapsing it to the majority pushes the
+minority periods silently down the chain to a weaker tag. So the group check reads the *shape*: if
+the members partition the timeline into a contiguous prefix and suffix it is a switch, stitched and
+flagged with its boundary date; if they interleave it is noise, and the majority wins. Derived from
+the data rather than hand-written per pair, so a group added later is handled without a new
+exception.
+
+**Each chain declares an aggregation class** — `FLOW`, `INSTANT` or `PER_SHARE` — plus a
+`subtractable` flag. (c)'s `Q4 = FY − (Q1+Q2+Q3)` applies only to additive flows. Applied to
+diluted EPS it is arithmetically well-formed, plausible on sight, and wrong whenever the share
+count moved during the year — most of this universe, and most wrong for exactly the fast-diluting
+companies whose EPS matters. The `subtractable` flag exists because a weighted-average share count
+buckets as a duration but is not a sum of its quarters.
+
+**Each chain declares one acceptable unit; facts in any other unit are excluded and counted.**
+This is what catches EPS tagged under `USD` rather than `USD/shares`, a non-USD reporting currency
+(§12), and a `pure`-unit ratio filed under a money concept. No unit *conversion* happens anywhere:
+a scaling step is a second place for a factor-of-1000 error to live.
+
+**Each chain declares a sign convention.** Capex is filed positive and §5.3 subtracts it;
+`InterestIncomeExpenseNet` is signed the other way. Without a declared convention, a series is
+right for most filers and inverted for a few, in the direction that flatters them. The flip is a
+property of the chain *member* rather than a response to observing a negative value, and it
+produces a `Derivation(rule="sign_normalized")`. A fact contradicting the convention is kept and
+counted as a finding — a negative capex quarter is a real disposal netting, and dropping it is
+wrong in the other direction.
+
+**A metric is a selection, and two selections that share a name do not share a definition.** So
+cross-metric derivations name their own tags rather than composing over `Metric`. The
+total-liabilities fallback is the case that makes this a rule: written as
+`LiabilitiesAndStockholdersEquity − Metric.EQUITY` — the natural form, since `EQUITY` is a
+resolved metric sitting right there — it overstates liabilities by exactly the noncontrolling
+interest, because `EQUITY` resolves to parent-only `StockholdersEquity` while the derivation needs
+the including-NCI tag. That inflates net debt, deflates interest coverage and moves Altman's
+leverage term, for precisely the ~11% of filers who reach that branch.
 
 Also: `companyfacts` **excludes company-custom extension taxonomies** by design. Some line
 items simply will not be there for some filers. That's not a bug to work around; it's a
@@ -470,7 +592,33 @@ independently of the PDF template. It's what `--explain` dumps, and the prerequi
 (still undecided) `investo diff`. Without it the PDF is a dead end — nothing downstream can
 consume a run.
 
-Serializer lives at `report/serialize.py`.
+Serializer lives at `report/serialize.py`, built in M2 and designed in `docs/m2/04-serialize.md`.
+Five properties of the document, settled there:
+
+- **An envelope with declared-but-empty keys.** `analysis`, `forecast`, `narrative` and `backtest`
+  are `null` until the milestone that fills them, rather than absent — a consumer reaching for a
+  forecast that is not there should break loudly, not get a `KeyError` indistinguishable from a
+  typo, and the document's growth then shows in a diff as one reviewable line.
+- **`schema_version` is an integer, independent of the package version and the PDF template.**
+  Adding a key is not a bump; changing a key's type, units or meaning is. The document gains a
+  top-level key at four of the next five milestones, so a version that increments on every
+  addition tells a reader nothing.
+- **Source refs are interned** into a top-level `sources` array and referenced by index, with an
+  integer meaning a `SourceRef` and an object meaning a `Derivation` — the JSON type is the
+  discriminator. `investo diff` is this document's stated purpose, and inline refs make a single
+  restated value diff as a changed number plus forty lines of identical provenance. Index
+  assignment is by sorted key, not encounter order. The array doubles as §9.1's tag-provenance
+  appendix, already deduplicated.
+- **Values serialize as JSON strings, not JSON numbers.** A JSON number is an IEEE double to most
+  parsers, so `391035000000.01` reads back as `391035000000.010009765625`. Note that a round-trip
+  test with `parse_float=Decimal` passes either way — the assertion has to be on the quoting in the
+  serialized bytes.
+- **No API key is ever emitted.** The serializer names the config fields it writes as an
+  allowlist, not a `model_dump()` with exclusions, because the failure mode of a denylist is that
+  the next field added is emitted by default — and §10 says keys are never logged.
+
+`serialize` returns a string and does not write; the command owns the file. That keeps §11's
+determinism assertion a string comparison rather than a filesystem fixture.
 
 ---
 
@@ -715,6 +863,19 @@ Distinct from company flags, and important: low tag coverage, missing Q4, a stit
 revenue series crossing the ASC 606 boundary, restatement detected in the window,
 lookback shorter than requested. These attach to the report's confidence rating rather
 than to the company's score.
+
+The stitch flag is stated above for ASC 606 because that is the case every long history hits, but
+it is **the general case that is flagged**: any series assembled from more than one chain member,
+including a filer that moved permanently between two members of an exclusivity group (§4.2.1) — a
+new tax nexus making assessed taxes material, say. Those are the same event to a reader of the
+report — the definition behind the series changed on a date — and flagging only the one with a
+standards body attached would leave the other silently in a growth rate. `normalize` emits both
+with the boundary date and both tags; §6.2's registry assigns the severity.
+
+**Restatement is flagged on a *value change*, not on a re-filing.** A period carried forward as a
+comparative appears under several accessions with several filing dates and the same number, which
+is ordinary and is not a restatement. Flagging it would put an accounting signal on a company that
+did nothing.
 
 ### 6.5 Peer context
 
@@ -1136,7 +1297,8 @@ machine.
 
 | Layer | Approach |
 |---|---|
-| Normalize | Golden fixtures: real `companyfacts` JSON for ~15 companies with known-hard cases (Apple's ASC 606 stitch, a bank, a REIT, a recent IPO, a restater, a Q4-less filer). Assert exact expected series. Reduced by the checked-in `tests/reduce_fixture.py` rather than hand-edited, so a reviewer can ask why a fixture contains what it does. Provenance and the synthetic/real status of each is recorded in `tests/fixtures/edgar/PROVENANCE.md`. |
+| Normalize | Golden fixtures: real `companyfacts` JSON for ~15 companies with known-hard cases (Apple's ASC 606 stitch, a bank, a REIT, a recent IPO, a restater, a Q4-less filer). Assert exact expected series. Reduced by the checked-in `tests/reduce_fixture.py` rather than hand-edited, so a reviewer can ask why a fixture contains what it does. Provenance and the synthetic/real status of each is recorded in `tests/fixtures/edgar/PROVENANCE.md`. **Until curation lands, "exact expected series" is self-referential** — every fixture is synthetic, so asserting a value against a payload that says so because the generator was told to tests the generator. M2 asserts *derivations* instead (`docs/m2/05-testing.md` §2), which is CLAUDE.md's rule anyway and which survives the synthetic set intact. |
+| Coverage | ROADMAP M2's ≥90%-across-20-names criterion is a **`network`-marked probe run by a person**, not a CI test — CI sets no `INVESTO_*` variables and a test that reaches the network must fail rather than quietly pass. The universe is stratified by market-cap quintile with a bank, a REIT and a sub-3y filer included and the fixture companies excluded, because tag coverage correlates with filer size and 20 large caps would measure ~97% and predict nothing. The run is recorded in `docs/m2/COVERAGE.md`. |
 | EDGAR client | Rate-limiter unit tests with an **injected clock**; **`respx`**-mocked retries; one opt-in live smoke test. (`respx`, not `responses` — `responses` patches `requests` and cannot mock httpx. Spec question 3, a tooling correction rather than a design change.) |
 | Forecast | Synthetic series with known CAGR → assert recovery within tolerance. Interval width must scale ≈√h (the local-level-with-drift prior, §5.2), not merely increase — monotonic widening is a near-vacuous assertion that a badly miscalibrated interval passes. Reinvestment-consistency and `g < WACC` constraints tested at their boundaries. |
 | Quality scores | Hand-computed fixtures from real filings, cross-checked against a published screener. **Not** "worked examples from the original papers" — Piotroski (2000), Altman (1968) and Beneish (1999) are portfolio-sort and discriminant-function studies; none contains a per-firm step-by-step computation to copy. |
