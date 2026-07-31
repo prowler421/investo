@@ -122,10 +122,44 @@ fixtures rather than chasing generality up front.
 
 ---
 
-## M2 — Normalization (~1.5 weeks) ⚠️ hardest phase
+## M2 — Normalization (~3.5 weeks, re-estimated) ⚠️ hardest phase
 
 **Goal:** `investo facts AAPL --lookback 5y` prints clean annual + quarterly statements
 with a coverage report.
+
+Detailed design: [`docs/m2/`](docs/m2/README.md) — the chain registry and its resolution rule, the
+normalization pipeline order, the coverage denominator, `report.json`, and the test plan. It is
+subordinate to this file and to DESIGN.md; its seventeen spec questions were **accepted on review
+(2026-07-31)** and are folded into DESIGN.md §3.2, §4.2, §4.2.1, §4.5 and §11 — with one
+exception, recorded below.
+
+**The ~1.5 week estimate is superseded.** Re-estimated at **~3.5 weeks part-time** (~17.5 days),
+of which **~13 days is coding and ~4.5 days is research**. The design added machinery that is
+justified and was not in the original count: a two-pass exclusivity resolution, five guards on
+residual recovery, the period spine, per-metric coverage arithmetic, and the serializer's
+determinism rules. This is the same shape as M1's re-estimate and roughly the same multiple.
+Breakdown in [`docs/m2/README.md` § Sizing](docs/m2/README.md#9-sizing). This milestone's own entry
+already said *"budget generously. If it runs long, cut M6 scope, not this"* — the re-estimate is
+that clause being invoked before the fact rather than after.
+
+**Two research workstreams start on day one, in parallel**, and each gates something that would
+otherwise be declared done on no evidence:
+
+1. **Fixture curation** (~3 d, carried over from M1) gates the "exact expected series" criterion.
+   Every fixture is still synthetic, so value assertions currently test `make_fixtures.py`; the
+   derivation assertions hold either way, which means **nothing fails to tell you** curation was
+   skipped.
+2. **The coverage measurement** (~1.5 d) gates the ≥90% criterion **and** the tier-2 chain
+   orderings. Those eleven orderings are `docs/m2/01-tags.md`'s proposals rather than measurements,
+   and they are **deliberately not written into DESIGN §4.2 yet** — a guess becomes normative by
+   having been written down. They land there in the same commit as `docs/m2/COVERAGE.md`.
+
+**A ROADMAP amendment part-way through this milestone is an expected outcome, not a failure.**
+§4.2's own counts say `LongTermDebtNoncurrent` covers 1,532 of ~5,000 filers and that the chain is
+*"the weakest of the set."* A hard 90% floor there will be met by adding a chain member that means
+something slightly different — which moves the number without improving the data. If the
+measurement lands under the criterion, the honest response is per-metric floors with the weak ones
+named, decided from the table rather than now.
 
 - `normalize/tags.py` — ordered fallback chains, **both tiers** from DESIGN.md §4.2: the
   DCF metrics *and* the ~10–15 additional chains the M4 quality scores need
@@ -140,7 +174,10 @@ with a coverage report.
 - ASC 606 revenue stitching across the 2018 boundary
 - `report/serialize.py` → `report.json` (DESIGN.md §4.5); creates the `report/` package that
   M3 then fills in
-- Golden fixtures: Apple, a bank, a REIT, a recent IPO, a restater, a Q4-less filer
+- Golden fixtures: Apple, a bank, a REIT, a recent IPO, a restater, a Q4-less filer — **plus six
+  synthetic additions M2 must generate**, because the existing set was checked and contains no YTD
+  fact, no tier-2 tag, neither NCI tag, no `OTHER`-bucket duration, no unit mismatch, and nothing
+  that produces an `OBSERVED` spine ([`docs/m2/05-testing.md` §2](docs/m2/05-testing.md#2-fixtures))
 
 **Exit:** ≥90% coverage across 20 NASDAQ names on **both** the DCF metric set and the
 quality-score metric set; every fixture's expected series asserted exactly; `as_of`
@@ -366,7 +403,16 @@ stay at five years.
 
 ## Rough total to a genuinely useful v1
 
-M0–M5 ≈ **8.5–9.5 weeks part-time**. M6 and M7 add ~2.5 weeks.
+M0–M5 ≈ **8.5–9.5 weeks part-time** as originally drafted. M6 and M7 add ~2.5 weeks.
+
+**That total is now known to be low, and by how much for the first three milestones.** M1 was
+re-estimated from ~1.5 weeks to ~2.5–3 (and M1b is on top of that); M2 from ~1.5 to ~3.5. Both
+re-estimates were made *after* designing the milestone in detail and *before* building it, and both
+came out at roughly 2.3×. The pattern is not that the work grew — it is that a one-line roadmap
+entry does not price a two-pass resolver, a five-guard derivation, or three days of research with
+no green test attached. Assume the same multiple applies to M3–M5 until a milestone lands that
+disproves it, which would put M0–M5 nearer **15–18 weeks part-time**. The individual estimates are
+updated in place; this total is left as drafted so the gap between the two remains visible.
 
 Minimum defensible release is **M0–M4.5**: no forecast, but accurate normalized financials,
 quality scores, efficiency trends, red flags, 8-K event detection, filing diffs, ownership
@@ -483,6 +529,76 @@ Decided while building M1:
   `docs/m1/04-parsers.md` §3 declares. The column carries genuine `null` mixed with `0`/`1`, and
   casting `null` to `False` records "definitely not numeric XBRL" where the truth is "not stated".
 
+Decided while designing M2 (all seventeen spec questions in `docs/m2/README.md` §7, accepted on review
+2026-07-31, folded into DESIGN.md except where noted):
+
+- **Chain resolution is period-wise, not series-level.** §4.2's "first match wins" does not say at
+  what granularity, and series-level loses two of Apple's four annual revenue periods *while
+  reporting full coverage on the two it keeps*. Period-wise makes the ASC 606 stitch structural
+  rather than a special case keyed on 2018, and makes tag selection independent of `--lookback`.
+- **Mutually incompatible tags are declared in exclusivity groups**, which is what enforces §4.2's
+  "never mix within one series" — not the resolution algorithm. `SalesRevenueNet` is deliberately
+  outside the revenue group: a temporal substitution across a standards boundary is not a
+  definitional substitution within one.
+- **Coverage is measured against a period spine derived from the filing history**, with a labelled
+  `OBSERVED` fallback. "% filled" without a stated denominator is not a measurement — the three
+  naive readings measure company age, or are circular, or differ by more than the criterion's own
+  margin.
+- **Each chain declares an aggregation class and a `subtractable` flag.** Q4 is never derived for a
+  per-share or instant metric, nor for a weighted-average share count. Derived diluted-EPS Q4 is
+  well-formed, plausible, and wrong for any filer whose share count moved.
+- **Each chain declares one acceptable unit; facts in any other unit are excluded and counted.**
+- **Each chain declares a sign convention. A flip is a property of the chain member, not a response
+  to the data**, and produces a `Derivation`. A fact contradicting the convention is kept and
+  counted, not corrected.
+- **A metric is a selection, and two selections that share a name do not share a definition.**
+  Cross-metric derivations name tags, never `Metric`. Total liabilities is derived from the
+  including-NCI equity tag; `L&SE − Metric.EQUITY` overstates it by exactly the NCI, for precisely
+  the ~11% of filers who reach that branch.
+- **YTD is differenced only to recover a period the filer did not report discretely; `OTHER` is
+  dropped and counted per metric.** The narrow duration bands stand against SEC's wider frames
+  tolerance. Q4 derivation and YTD differencing are one rule, and nothing is derived from a derived
+  part.
+- **Superseded restatement values are retained** in the `Restatement` record, which keeps open
+  question 10 answerable later without a re-parse. The `restated` *finding* fires on a value
+  change, not on a re-filing — Apple's 2019-06-29 quarter appears under four accessions with the
+  same value, and flagging it would put a false accounting signal on the flagship fixture.
+- **M2 assigns no severity and makes no refusal.** Findings carry a stable code; §6.2's registry
+  owns severity and §6.10's gate is M4's and M5's. A refusal reached inside normalization is a
+  refusal with no report attached, which is the opposite of what §6.10 asks for.
+- **`normalize/tags.py` is the only module that may contain a `us-gaap` literal**, widening M1's
+  `ingest/` rule to the whole package with a one-key allowlist. **The registry holds exactly one
+  summing member** (SG&A), asserted, so a second is a visible edit.
+- **No sort under `normalize/` or `report/` may use a partial key.** `FiscalPeriod` compares on
+  `(end, kind)`, so a stable sort over ties returns payload iteration order — deterministic in
+  practice and not a property §11's gate should rest on.
+- **`report.json` interns source refs and serializes values as strings**, asserted on the
+  serialized bytes rather than by a round-trip, which passes either way.
+- **`facts` gains `--json` (to stdout) and never exits 3.** Exit 3 promises a written report;
+  `facts` writes none.
+- **M2 adds no dependencies.** `pandas` arrives in M5, over series that have already been reduced
+  to numbers — a DataFrame column drops the `SourceRef` that §3.2 requires travel with the value.
+- **The tier-2 chain orderings are the one thing NOT folded into DESIGN §4.2**, because they are
+  proposals rather than measurements. Provisional until `docs/m2/COVERAGE.md` exists.
+
+Raised while reviewing the M2 design (spec questions 13–17 in `docs/m2/README.md` §7):
+
+- **`build_history` accepts an absent `companyfacts` and an absent `submissions`, independently.**
+  Both are `| None` on `FetchResult` with live paths in M1, and both are exit-0 absences under §14.
+  An absent payload yields an empty `FinancialHistory` with the gap in the coverage report, never
+  an exception. `cik` and the display name come from the resolved ticker row so a submissions 404
+  does not lose the company's identity, and `fiscal_year_end` widens to `str | None`.
+- **Spine dates and fact period ends match within ±3 days, one-to-one.** Exact equality between two
+  different fields — the filing header's `reportDate` and the XBRL context end — would silently
+  undercount coverage in the one number that gates the milestone. One-to-one because otherwise two
+  facts a day apart both claim one slot and `filled` exceeds `expected`.
+- **A permanent switch between exclusivity-group members is stitched and flagged, not collapsed.**
+  Partition versus interleave is the test. Without it, the group rule reintroduces the ASC 606 hole
+  one level down, with no analogous escape hatch.
+- **`Resolution` carries a tuple of facts, not one.** The SG&A summing member needs two, and
+  computing the sum outside `normalize/tags.py` would put tag knowledge where the `us-gaap`
+  allowlist forbids it.
+
 ---
 
 ## Open questions
@@ -534,7 +650,9 @@ Ordered by how much the answer changes the build.
 9. **Insider transactions and institutional holdings** (Forms 4, 13F) — free on EDGAR,
    moderate signal, meaningful extra parsing work. In or out?
 10. **Restatement display** — when a series is stitched across ASC 606 or contains restated
-    periods, show both versions or just the current one?
+    periods, show both versions or just the current one? *M2 retains the superseded values in the
+    `Restatement` record either way, so this stays open at the cost of a few hundred bytes per
+    affected period rather than a re-parse.*
 11. **Restatement and stitch transparency in the appendix** — how much provenance detail is
     useful before it becomes noise?
 

@@ -6,8 +6,12 @@ Give it a ticker; it pulls the company's audited financials and 10-K/10-Q text f
 runs a deterministic financial model, scans for accounting and governance red flags,
 compares against sector peers, and emits a PDF.
 
-> **Status: design phase.** Nothing is implemented yet. See [DESIGN.md](DESIGN.md) for the
-> architecture and [ROADMAP.md](ROADMAP.md) for the build plan and open questions.
+> **Status: ingest built, normalization designed.** `investo fetch` and `investo cache prune`
+> work — EDGAR and price payloads are fetched through a rate-limited choke point, cached
+> immutably, and parsed into typed rows. `analyze`, `facts` and `backtest` parse their full flag
+> surface and report the milestone that implements them. See [DESIGN.md](DESIGN.md) for the
+> architecture, [ROADMAP.md](ROADMAP.md) for the build plan and open questions, and
+> [`docs/`](docs/) for the per-milestone designs.
 
 ---
 
@@ -69,8 +73,8 @@ what a human skims past, and forcing every assumption to be named and adjustable
 
 ## Quickstart
 
-*(`fetch` and `cache prune` work as of M1. `analyze` and `facts` are the target interface — they
-parse their full flag surface and report the milestone that implements them.)*
+*(`fetch` and `cache prune` work as of M1. `facts` arrives with M2 and `analyze` with M3 — both
+parse their full flag surface today and report the milestone that implements them.)*
 
 ```bash
 uv sync
