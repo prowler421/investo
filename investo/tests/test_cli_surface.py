@@ -199,32 +199,60 @@ def test_config_error_message_goes_to_stderr(configured: None) -> None:
     [
         ("analyze AAPL", "M3"),
         ("facts AAPL", "M2"),
-        ("fetch AAPL", "M1"),
-        ("cache prune --older-than 90d", "M1"),
         ("backtest", "M7"),
     ],
 )
 def test_stub_exits_70_and_names_its_milestone(
     command: str, milestone: str, configured: None
 ) -> None:
-    """Every command parses and resolves config, then says which milestone implements it.
+    """Every unimplemented command parses and resolves config, then says which milestone fills it in.
 
     Exit 70 rather than 0: a script must not read "parsed successfully" as "ran".
+
+    **`fetch` and `cache prune` left this list in M1**, which is the intended lifecycle — ROADMAP
+    § Decided during design: *"Exit 70 for an unimplemented command... It disappears with the last
+    stub."* Removing a row here is what landing a milestone looks like, and the three that remain are
+    the ones M2, M3 and M7 own. When the last one goes, `NotImplementedYetError` and
+    `ExitCode.NOT_IMPLEMENTED` go with it.
     """
     result = runner.invoke(app, command.split())
     assert result.exit_code == int(ExitCode.NOT_IMPLEMENTED)
     assert milestone in result.output
 
 
+@pytest.mark.spec
+def test_implemented_commands_do_not_report_not_implemented(configured: None) -> None:
+    """The converse, and it is the half that rots silently.
+
+    A command whose body has landed must never exit 70 again. Without this, a refactor that
+    reintroduced a stub — or a merge that reverted one — would leave the suite green while
+    `investo fetch AAPL` told the user the milestone had not shipped.
+
+    Asserted on the *code*, not the output, and with no network configured: `fetch` will fail at
+    exit 2, 4 or 5 depending on how far it gets, and any of those is fine. 70 is the only wrong
+    answer.
+    """
+    for command in (["fetch", "AAPL"], ["cache", "prune", "--older-than", "90d"]):
+        result = runner.invoke(app, command)
+        assert result.exit_code != int(ExitCode.NOT_IMPLEMENTED), (
+            f"`investo {' '.join(command)}` still reports exit 70; its M1 body did not land"
+        )
+
+
 def test_stub_is_reached_only_after_config_resolves() -> None:
     """Ordering matters: config errors must win over the not-implemented notice.
 
-    Otherwise M0 would report "not implemented" for a run that would have failed at exit 5
-    anyway, and the config layer would go unexercised until M1.
+    Otherwise a command would report "not implemented" for a run that would have failed at exit 5
+    anyway, and the config layer would go unexercised.
+
+    Uses `facts`, which is still a stub. It was written against `fetch` in M0, and M1 implementing
+    `fetch` is exactly why a test like this needs a subject that is still unimplemented — the
+    property is about the *ordering* of config resolution against the stub raise, not about any one
+    command.
     """
-    result = runner.invoke(app, ["fetch", "AAPL"])
+    result = runner.invoke(app, ["facts", "AAPL"])
     assert result.exit_code == int(ExitCode.CONFIG_ERROR)
-    assert "M1" not in result.output
+    assert "M2" not in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -362,8 +390,12 @@ def test_cli_flags_override_the_environment(
 # ---------------------------------------------------------------------------
 def test_main_returns_the_exit_code(configured: None) -> None:
     """`main` reports codes rather than raising, so `python -m investo` and the console script
-    agree."""
-    assert main(["fetch", "AAPL"]) == int(ExitCode.NOT_IMPLEMENTED)
+    agree.
+
+    `facts` rather than `fetch`: M1 implemented `fetch`, and this test needs a command whose exit
+    code is known without a network round trip.
+    """
+    assert main(["facts", "AAPL"]) == int(ExitCode.NOT_IMPLEMENTED)
 
 
 def test_main_returns_zero_for_help() -> None:

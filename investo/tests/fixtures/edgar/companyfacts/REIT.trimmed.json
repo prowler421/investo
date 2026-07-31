@@ -1,0 +1,80 @@
+{
+  "cik": "0001063761",
+  "entityName": "Example Properties Trust",
+  "facts": {
+    "us-gaap": {
+      "Revenues": {
+        "label": "",
+        "description": "",
+        "units": {
+          "USD": [
+            {
+              "start": "2018-01-01",
+              "end": "2018-12-31",
+              "val": 5580000000,
+              "accn": "0000320193-19-000119",
+              "fy": 2019,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2019-10-31"
+            }
+          ]
+        }
+      },
+      "NetIncomeLoss": {
+        "label": "",
+        "description": "",
+        "units": {
+          "USD": [
+            {
+              "start": "2018-01-01",
+              "end": "2018-12-31",
+              "val": 1470000000,
+              "accn": "0000320193-19-000119",
+              "fy": 2019,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2019-10-31"
+            }
+          ]
+        }
+      },
+      "Assets": {
+        "label": "",
+        "description": "",
+        "units": {
+          "USD": [
+            {
+              "end": "2018-12-31",
+              "val": 35600000000,
+              "accn": "0000320193-19-000119",
+              "fy": 2019,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2019-10-31"
+            }
+          ]
+        }
+      }
+    },
+    "dei": {
+      "EntityCommonStockSharesOutstanding": {
+        "label": "",
+        "description": "",
+        "units": {
+          "shares": [
+            {
+              "end": "2019-02-15",
+              "val": 347000000,
+              "accn": "0000320193-19-000119",
+              "fy": 2019,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2019-10-31"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

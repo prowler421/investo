@@ -1,0 +1,64 @@
+{
+  "cik": "0002093536",
+  "entityName": "ARXIS, INC.",
+  "facts": {
+    "ffd": {
+      "NetFeeAmt": {
+        "label": "",
+        "description": "",
+        "units": {
+          "USD": [
+            {
+              "end": "2026-04-06",
+              "val": 153994.53,
+              "accn": "0001193125-26-146309",
+              "fy": null,
+              "fp": null,
+              "form": "S-1/A",
+              "filed": "2026-04-08",
+              "frame": "CY2026Q1I"
+            }
+          ]
+        }
+      }
+    },
+    "us-gaap": {
+      "AccountsPayableCurrent": {
+        "label": "",
+        "description": "",
+        "units": {
+          "pure": [
+            {
+              "start": "2025-01-01",
+              "end": "2025-03-31",
+              "val": 0.367,
+              "accn": "0001193125-26-243043",
+              "fy": 2026,
+              "fp": "Q1",
+              "form": "10-Q",
+              "filed": "2026-05-28",
+              "frame": "CY2025Q1"
+            }
+          ]
+        }
+      },
+      "Assets": {
+        "label": "",
+        "description": "",
+        "units": {
+          "USD": [
+            {
+              "end": "2026-03-31",
+              "val": 4210000,
+              "accn": "0001193125-26-243043",
+              "fy": 2026,
+              "fp": "Q1",
+              "form": "10-Q",
+              "filed": "2026-05-28"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

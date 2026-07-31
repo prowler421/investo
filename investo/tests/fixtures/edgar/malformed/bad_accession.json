@@ -1,0 +1,184 @@
+{
+  "cik": "0002093536",
+  "entityType": "operating",
+  "sic": "3728",
+  "sicDescription": "Aircraft Parts & Auxiliary Equipment, NEC",
+  "ownerOrg": "06 Technology",
+  "insiderTransactionForOwnerExists": 0,
+  "insiderTransactionForIssuerExists": 1,
+  "name": "Arxis, Inc.",
+  "tickers": [
+    "ARXS"
+  ],
+  "exchanges": [
+    "Nasdaq"
+  ],
+  "ein": "931234567",
+  "lei": "",
+  "description": "",
+  "website": "",
+  "investorWebsite": "",
+  "category": "Non-accelerated filer",
+  "fiscalYearEnd": "1231",
+  "stateOfIncorporation": "DE",
+  "stateOfIncorporationDescription": "DE",
+  "addresses": {
+    "business": {
+      "street1": "1 Example Way",
+      "city": "Austin",
+      "stateOrCountry": "TX"
+    }
+  },
+  "phone": "512-555-0100",
+  "flags": "",
+  "formerNames": [],
+  "filings": {
+    "recent": {
+      "accessionNumber": [
+        "0001193125-26-24304",
+        "0001193125-26-146309",
+        "9999999997-26-004411",
+        "0001140361-26-025622",
+        "0001140361-26-025999",
+        "0001193125-26-201188",
+        "0001193125-26-118844"
+      ],
+      "filingDate": [
+        "2026-05-28",
+        "2026-04-08",
+        "2026-04-14",
+        "2026-04-20",
+        "2026-05-04",
+        "2026-05-12",
+        "2026-03-30"
+      ],
+      "reportDate": [
+        "2026-03-31",
+        "",
+        "",
+        "",
+        "2026-05-01",
+        "2026-05-11",
+        ""
+      ],
+      "acceptanceDateTime": [
+        "2026-05-28T16:31:02.000Z",
+        "2026-04-08T06:02:44.000Z",
+        "2026-04-14T00:03:11.000Z",
+        "2026-04-20T20:14:55.000Z",
+        "2026-05-04T18:02:10.000Z",
+        "2026-05-12T12:00:03.000Z",
+        "2026-03-30T09:11:41.000Z"
+      ],
+      "act": [
+        "34",
+        "33",
+        "",
+        "",
+        "",
+        "34",
+        "34"
+      ],
+      "form": [
+        "10-Q",
+        "S-1/A",
+        "EFFECT",
+        "3",
+        "4",
+        "8-K",
+        "8-A12B"
+      ],
+      "fileNumber": [
+        "001-42311",
+        "333-284119",
+        "333-284119",
+        "001-42311",
+        "001-42311",
+        "001-42311",
+        "001-42311"
+      ],
+      "filmNumber": [
+        "26901234",
+        "26788001",
+        "",
+        "",
+        "",
+        "26884411",
+        "26701221"
+      ],
+      "items": [
+        "",
+        "",
+        ",,",
+        "",
+        "",
+        "1.01,8.01,9.01",
+        ""
+      ],
+      "core_type": [
+        "10-Q",
+        "S-1/A",
+        "EFFECT",
+        "3",
+        "4",
+        "8-K",
+        "8-A12B"
+      ],
+      "size": [
+        3412887,
+        8812403,
+        1041,
+        8814,
+        9210,
+        121004,
+        44120
+      ],
+      "isXBRL": [
+        1,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0
+      ],
+      "isInlineXBRL": [
+        1,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0
+      ],
+      "isXBRLNumeric": [
+        1,
+        0,
+        null,
+        null,
+        null,
+        0,
+        null
+      ],
+      "primaryDocument": [
+        "arxs-20260331.htm",
+        "d901234ds1a.htm",
+        "",
+        "xslF345X06/ownership.xml",
+        "xslF345X06/ownership.xml",
+        "d998877d8k.htm",
+        "ARXS_8A_Cert_2093536.pdf"
+      ],
+      "primaryDocDescription": [
+        "10-Q",
+        "",
+        "",
+        "",
+        "",
+        "8-K",
+        ""
+      ]
+    },
+    "files": []
+  }
+}

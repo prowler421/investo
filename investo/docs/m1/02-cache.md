@@ -228,9 +228,9 @@ next `prune` collects.
 @dataclass(frozen=True, slots=True)
 class PruneReport:
     entries_removed: int
+    entries_kept: int
     blobs_removed: int
     bytes_reclaimed: int
-    entries_kept: int
 ```
 
 Printed by the command, because a prune that reports nothing is a prune the user runs twice.

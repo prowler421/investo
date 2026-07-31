@@ -1,6 +1,7 @@
 # M1 — Ingest + cache
 
-Status: **draft for review, nothing built.**
+Status: **built.** See ROADMAP M1 for what landed and the three things that did not — fixture
+curation, the `files[]` field-name confirmation, and the coverage floor.
 Last updated: 2026-07-31
 
 Design for ROADMAP M1. `DESIGN.md` and `ROADMAP.md` remain normative; this document is
@@ -402,6 +403,46 @@ and surfaces Tiingo's own 429 response. Confirm against Tiingo's docs when the k
 **9. 404 as an absence rather than a fetch failure** — see [§ Exit codes](#4-exit-codes). A
 reading of §14 rather than a contradiction of it, but it decides `fetch`'s exit code on a real
 and common input, so it should be explicit somewhere normative.
+
+### Raised while implementing (2026-07-31)
+
+Two more, in the same form. Both are recorded in ROADMAP § Decided during design.
+
+**10. `manifest_hash` cannot cover only the entries a run *read*, and this document says it does.**
+
+[`02-cache.md` § 4](02-cache.md#4-manifest_hash--the-appendixs-cache-fingerprint) specifies that
+`get` records a read and *"a miss records nothing"* — which makes the hash **empty on a cold run**,
+because a cold run reads nothing. But [§ 3](#3-investo-fetch--the-command-surface)'s sample output
+prints `manifest 9f2c1ab4` on a run whose sources are all `fetched`, not `cached`. Those two
+statements cannot both hold.
+
+Resolved as **entries *used*** — a cache hit or a fresh `put`. That is what makes a cold run and the
+warm run after it produce the *same* fingerprint, which is the property the appendix value exists
+for: *did this report see the same data as that one?* Under the read-only reading, the answer would
+be "no" for a report and its own rerun, and §11's determinism gate would be measuring cache state
+rather than report content.
+
+DESIGN §9.1 now says so. Tested by `test_cache::test_manifest_hash_matches_between_a_cold_and_a_warm_run`.
+
+**11. A missing price-provider key means `investo fetch` cannot run at all out of the box.**
+
+[`05-prices.md` § 2](05-prices.md#2-tiingopy--the-default) says a missing `INVESTO_TIINGO_KEY` is a
+`ConfigError` before any request — *"the same shape as the User-Agent rule."* That is right on its own
+terms. The consequence it does not discuss: `Settings.price_provider` defaults to `tiingo`, so
+`investo fetch AAPL` — this milestone's headline deliverable, and the subject of its cold-fetch exit
+criterion — exits 5 for anyone without a Tiingo account, *after* the EDGAR half would have succeeded.
+
+Implemented as specified rather than softened, and raised rather than resolved in code. The two
+alternatives, if it becomes annoying:
+
+- `fetch` records `prices: no provider configured` as an **absence** and exits 0, leaving `analyze`
+  as the command that requires a price. Consistent with spec question 9's treatment of a 404, and it
+  makes the EDGAR half of `fetch` usable with nothing but a User-Agent.
+- Default `price_provider` to `stooq`, which needs no key. Cheaper still, but it makes the default
+  path the one with **no adjusted close** — and §4.3's whole argument is that an unadjusted series
+  feeding a beta estimate is the failure this project exists to avoid. So: not that one.
+
+The error message names both escapes, so a first run is not a dead end.
 
 ### Two risks accepted, not resolved
 

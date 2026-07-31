@@ -364,8 +364,8 @@ class FilingRow:
     primary_document: str
     items: tuple[str, ...]         # 8-K item codes, parsed
     items_raw: str                 # as filed, never discarded
-    is_xbrl: bool
-    is_inline_xbrl: bool
+    is_xbrl: bool | None           # the column carries genuine `null` mixed with 0/1
+    is_inline_xbrl: bool | None    # so casting null to False would misreport it
     size: int | None
 
     def primary_url(self, cik: int) -> str: ...

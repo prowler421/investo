@@ -1,8 +1,15 @@
 """investo — fundamental due-diligence reports for NASDAQ-listed companies, from SEC filings.
 
-This is the M0 skeleton: the typer CLI shell, the pydantic-settings config layer, and the
-DESIGN.md §14 exit-code taxonomy. Every command declared in :mod:`investo.cli` parses its full
-documented flag surface and then reports the milestone that implements it.
+Through **M1**: the typer CLI shell and the pydantic-settings config layer (M0), the DESIGN.md §14
+exit-code taxonomy (M0), the domain types every later milestone is written against, and the ingest
+layer — a content-addressed cache, the single EDGAR client, the parsers, and three price adapters.
+``investo fetch TICKER`` works; ``analyze`` and ``facts`` still report the milestone that
+implements them.
+
+**Nothing here interprets a financial figure yet.** M1 fetches bytes, records where they came from
+and when, and turns them into typed rows keyed by XBRL tag. Choosing which tag answers to "revenue"
+is ``normalize/tags.py``, which is M2, and the seam is enforced by an AST test rather than by
+convention — see :mod:`investo.ingest`.
 
 ``DESIGN.md`` is normative on architecture and ``ROADMAP.md`` on sequencing; on any conflict
 between them and a comment in this package, the documents govern. The module tree in
@@ -18,6 +25,8 @@ later has to preserve them:
   output schema has no numeric field feeding anything downstream.
 """
 
-from investo import cli, config, errors
+from investo import cli, config, domain, errors, ingest
 
-__all__ = ["errors", "config", "cli"]
+# Dependency order — primitives first, then what is built on them — which reads as documentation of
+# the layer. RUF022's alphabetical sort is disabled in pyproject for exactly this reason.
+__all__ = ["errors", "config", "domain", "ingest", "cli"]

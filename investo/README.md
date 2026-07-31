@@ -69,18 +69,28 @@ what a human skims past, and forcing every assumption to be named and adjustable
 
 ## Quickstart
 
-*(Not yet functional — target interface.)*
+*(`fetch` and `cache prune` work as of M1. `analyze` and `facts` are the target interface — they
+parse their full flag surface and report the milestone that implements them.)*
 
 ```bash
 uv sync
+uv sync --extra yfinance               # optional: the yfinance price adapter
 
 # SEC requires a declared User-Agent. No default is provided; startup fails without it.
 export INVESTO_SEC_USER_AGENT="Investo research your.email@example.com"
-export INVESTO_TIINGO_KEY="..."        # optional: price data
+export INVESTO_TIINGO_KEY="..."        # price data — required by the default provider
 export INVESTO_ANTHROPIC_KEY="..."     # optional: narrative analysis
 
+investo fetch NVDA                     # works now: fills the cache, prints a summary
 investo analyze NVDA --llm anthropic   # --llm defaults to none
 ```
+
+`INVESTO_TIINGO_KEY` is not optional for a default run: `price_provider` defaults to `tiingo`, and a
+missing key is exit 5 before any request. Set `INVESTO_PRICE_PROVIDER=stooq` for a no-key run —
+noting that Stooq supplies no adjusted close, so beta and total-return figures are unavailable from
+it. The yfinance adapter ships with every install; the **dependency** is the opt-in extra above,
+because it pulls in a scraper and a TLS-impersonation chain a Tiingo user should not have to
+install.
 
 ## Usage
 
