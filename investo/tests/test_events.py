@@ -230,7 +230,7 @@ def test_the_aapl_fixture_4_02_is_extracted(aapl_submissions: bytes) -> None:
 # ---------------------------------------------------------------------------
 @pytest.mark.spec
 def test_this_module_has_no_severity_table() -> None:
-    """Mapping a code to a severity is M4.5's `analyze/events.py`, and the separation is the point.
+    """Mapping a code to a severity is M4.5's `analysis/events.py`, and the separation is the point.
 
     It is what keeps `ingest/` replaceable: a severity table here would mean swapping the extraction
     source also swapped the judgment. Asserted as the absence of *any* severity-shaped name rather

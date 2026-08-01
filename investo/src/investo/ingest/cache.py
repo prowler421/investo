@@ -305,7 +305,7 @@ class Cache:
             raw.flush()
             os.fsync(raw.fileno())
         # Atomic within a filesystem, so a reader never sees a partial blob.
-        os.replace(tmp, final)
+        tmp.replace(final)
 
     def _append(self, entry: CacheEntry) -> None:
         """Append one complete line in a single write. Single-process only."""
@@ -359,7 +359,7 @@ class Cache:
            an older one silently reverts the cache to a stale view. At least one entry per key
            survives, always, regardless of age.
         2. **Rewrite, then collect.** Write the surviving manifest to a temp file and
-           ``os.replace`` it; *then* delete blobs no surviving entry references.
+           ``Path.replace`` it; *then* delete blobs no surviving entry references.
 
         Rewrite before delete, because the reverse leaves a window in which the manifest
         references deleted blobs. With this ordering the failure window contains only
@@ -423,7 +423,7 @@ class Cache:
                 )
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(tmp, self._manifest)
+        tmp.replace(self._manifest)
 
     # -- manifest ----------------------------------------------------------
     def _read_manifest(self) -> list[CacheEntry]:

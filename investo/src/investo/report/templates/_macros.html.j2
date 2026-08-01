@@ -1,0 +1,63 @@
+{# Shared macros. Four of them, and `omission` is the one that matters.
+
+   Every "not available" in the document goes through `omission`, so the treatment is identical
+   whether the cause is an absent metric, an unbuilt milestone, or a chart below the point
+   threshold — a reader learns to recognise one shape rather than four.
+
+   No macro here does arithmetic and none formats a number: every value arrives already formatted
+   by `report/format.py`. That is CLAUDE.md convention 14, and `tests/test_templates.py` parses
+   this file with Jinja's own parser and fails on an arithmetic node. #}
+
+{% macro omission(text) -%}
+<p class="omission">{{ text }}</p>
+{%- endmacro %}
+
+{% macro chart(image) -%}
+{% if image.drawn %}
+<figure class="chart">
+  <img src="{{ image.data_uri }}" alt="{{ image.spec.title }}">
+  <figcaption>{{ image.spec.title }} — {{ image.points }} periods.</figcaption>
+</figure>
+{% else %}
+{{ omission(image.omitted) }}
+{% endif %}
+{%- endmacro %}
+
+{# `table` renders a caption even when there are no rows, because a section that silently
+   disappears is indistinguishable from a section that failed to render. #}
+{% macro table(spec) -%}
+<table class="data">
+  <caption>{{ spec.caption }}</caption>
+  {% if spec.is_empty %}
+  <tbody><tr><td class="omission">Nothing to show — see § Caveats, data coverage.</td></tr></tbody>
+  {% else %}
+  <thead>
+    <tr>
+      <th class="rowlabel"></th>
+      {% for column in spec.columns %}<th class="num">{{ column }}</th>{% endfor %}
+      {% if spec.note_heading %}<th class="note">{{ spec.note_heading }}</th>{% endif %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in spec.rows %}
+    <tr>
+      <th class="rowlabel">{{ row.label }}</th>
+      {% for cell in row.cells %}<td class="num">{{ cell }}</td>{% endfor %}
+      {% if spec.note_heading %}<td class="note">{{ row.note }}</td>{% endif %}
+    </tr>
+    {% endfor %}
+  </tbody>
+  {% endif %}
+</table>
+{% if spec.footnote %}<p class="footnote">{{ spec.footnote }}</p>{% endif %}
+{%- endmacro %}
+
+{# A two-column definition list. `rows` are `Row`s whose first cell is the value. #}
+{% macro pairs(rows) -%}
+<dl class="pairs">
+  {% for row in rows %}
+  <dt>{{ row.label }}</dt>
+  <dd>{{ row.cells[0] }}{% if row.note %} <span class="note">{{ row.note }}</span>{% endif %}</dd>
+  {% endfor %}
+</dl>
+{%- endmacro %}

@@ -49,6 +49,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
+from itertools import pairwise
 from typing import Final
 
 from investo.domain.models import Fact, Metric, RawFact
@@ -446,7 +447,7 @@ def residual(whole: Fact, parts: Sequence[Fact], *, rule: str) -> Fact | None:
     first_start = ordered[0].period.start
     if first_start is None or abs(first_start - whole.period.start) > SEAM_TOLERANCE:
         return None
-    for earlier, later in zip(ordered, ordered[1:], strict=False):
+    for earlier, later in pairwise(ordered):
         gap = (later.period.start or later.period.end) - earlier.period.end
         if gap <= timedelta(0) or gap > SEAM_TOLERANCE:
             return None
@@ -536,7 +537,7 @@ def recover_from_ytd(
     unusable = 0
     for start in sorted(ladders, key=identity):
         rungs = sorted(ladders[start], key=fact_sort_key)
-        for previous, current in zip(rungs, rungs[1:], strict=False):
+        for previous, current in pairwise(rungs):
             if current.period.kind is not PeriodKind.YTD:
                 continue
             if current.period.end in filed_ends:
@@ -552,9 +553,7 @@ def recover_from_ytd(
     # A YTD fact that was never anybody's `current` — the first rung of a ladder, with no earlier rung
     # to difference against — is unusable for the same reason and by the same arithmetic.
     paired = {
-        id(fact)
-        for rungs in ladders.values()
-        for fact in sorted(rungs, key=fact_sort_key)[1:]
+        id(fact) for rungs in ladders.values() for fact in sorted(rungs, key=fact_sort_key)[1:]
     }
     unusable += sum(
         1 for fact in ytd if fact.period.kind is PeriodKind.YTD and id(fact) not in paired

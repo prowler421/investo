@@ -1,7 +1,7 @@
 """One test per finding code, positive and negative — and the check that all eighteen are covered.
 
 `docs/m2/03-statements.md` §4 is normative. A finding states something true about the data and takes
-**no position on what it means**: §6.2 gives severity to `analyze/flags.py`'s rule registry, one rule
+**no position on what it means**: §6.2 gives severity to `analysis/flags.py`'s rule registry, one rule
 per file with its own test, and a severity assigned in `normalize/` is a severity assigned twice. The
 two copies diverge on the first rule M4 tunes, so the absence of the field is asserted rather than
 assumed.

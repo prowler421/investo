@@ -220,9 +220,7 @@ def test_tiers_are_reported_separately() -> None:
     assert dcf > quality
 
     rates = [
-        coverage.fill_rate
-        for coverage in report.annual.values()
-        if coverage.fill_rate is not None
+        coverage.fill_rate for coverage in report.annual.values() if coverage.fill_rate is not None
     ]
     combined = sum(rates, Decimal(0)) / Decimal(len(rates))
     assert quality < combined < dcf, "one aggregate over both tiers reports neither of them"

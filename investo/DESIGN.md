@@ -148,6 +148,9 @@ investo/
 ├── cli.py                    # typer app                         [M0]
 ├── config.py                 # pydantic-settings; env + TOML     [M0]
 ├── errors.py                 # ExitCode (§14) + exceptions       [M0]
+├── fetch.py                  # `investo fetch` body              [M1]
+├── facts.py                  # `investo facts` body              [M2]
+├── analyze.py                # `investo analyze` body            [M3]
 ├── domain/
 │   ├── models.py             # frozen dataclasses; zero I/O
 │   ├── periods.py            # FiscalPeriod, duration bucketing
@@ -174,7 +177,7 @@ investo/
 │   ├── tags.py               # ordered fallback chains per metric
 │   ├── facts.py              # dedup, as-of filtering, period buckets
 │   └── statements.py         # → FinancialHistory + CoverageReport
-├── analyze/
+├── analysis/                 # renamed from `analyze/`; see below
 │   ├── fundamentals.py
 │   ├── quality.py            # F/Z/M scores, accrual ratio
 │   ├── efficiency.py         # turnover ratios, cash conversion cycle
@@ -194,15 +197,26 @@ investo/
 │   ├── prompts/              # versioned .md templates
 │   └── extract.py            # schema-validated, citation-enforced
 ├── report/
-│   ├── charts.py             # matplotlib → SVG or PNG per chart
-│   ├── render.py             # Jinja2 → HTML → WeasyPrint → PDF
-│   ├── serialize.py          # → report.json
-│   └── templates/
+│   ├── serialize.py          # → report.json                     [M2]
+│   ├── format.py             # Decimal → str; the only place a
+│   │                         #   number becomes text             [M3]
+│   ├── model.py              # ReportModel: what a template sees  [M3]
+│   ├── charts.py             # matplotlib → SVG or PNG per chart  [M3]
+│   ├── render.py             # Jinja2 → HTML → WeasyPrint → PDF   [M3]
+│   └── templates/            # report/brief/_macros .html.j2, report.css
 └── backtest/
     ├── asof.py               # point-in-time reconstruction
     ├── runner.py
     └── metrics.py            # MAPE, directional hit rate, calibration
 ```
+
+**`analysis/`, not `analyze/`** — decided while designing M3 and recorded in ROADMAP § Decided
+during design. A command body must sit at the package root next to `cli.py`: `fetch.py` and
+`facts.py` already do, and `tests/test_layering.py` asserts it for every module permitted a clock
+read. So M3's body is `analyze.py`, and `analyze.py` and `analyze/` are the same import name. The
+package that does not exist yet is the cheaper one to move; the alternative spellings
+(`analyze_cmd.py`) buy a naming exception every future reader has to be told about, in exchange for
+a package name with no code behind it until M4.
 
 ### 3.2 Core domain types
 
@@ -619,6 +633,21 @@ Five properties of the document, settled there:
 
 `serialize` returns a string and does not write; the command owns the file. That keeps §11's
 determinism assertion a string comparison rather than a filesystem fixture.
+
+M3 adds four keys to the `run` block — `brief`, `explain`, `peers` and `assumptions` — which is not
+a `schema_version` bump under the rule above. `--explain` is otherwise **inert at M3**: README
+documents it as dumping intermediate calculations and there are none until M5's driver build, so it
+marks the run and a test asserts the PDF bytes are unchanged by it. `--brief` is likewise
+presentation only, and `report.json` is byte-identical between a brief run and a full one — the
+run record is a record of the run, and a brief run producing a smaller document would make
+`investo diff` results depend on which flag each side used.
+
+**The renderer consumes `FinancialHistory`, not this document.** Rendering from `report.json` would
+be the obvious architecture and it inverts the guarantee: in the document a value is a string and
+its source is an integer index, so a renderer with an off-by-one would print correct numbers under
+shifted provenance with nothing in the type system objecting. Keeping the value welded to its
+`Provenance` all the way to the page is what §3.2 establishes. `serialize` and `render` are two
+consumers of one history, and a test compares them against each other rather than trusting either.
 
 ---
 
@@ -1177,6 +1206,22 @@ fan chart is `fill_between(alpha=…)`). So: **SVG for simple bar and line chart
 format is a per-chart decision with PNG as the sanctioned fallback, and SVG is referenced
 as a file, not a `data:` URI (#134).
 
+**M3 ships every chart as PNG until the spike promotes one**, and that choice buys a security
+property the per-chart split does not: a PNG embeds as a `data:` URI, so with the stylesheet inlined
+there is no legitimate URL in the document and the `url_fetcher` below denies **every** URL
+unconditionally rather than allowing a `file://` path. Promoting a chart to SVG converts that
+unconditional deny into an allowlist of absolute paths — still safe, and a materially weaker thing
+to have to reason about. That cost belongs in the spike's decision. `docs/m3/02-render.md` §3.
+
+**The PNG path has its own nondeterminism, and it is a different key from SVG's.** matplotlib
+writes a `Software` text chunk naming its own version into every PNG, so two patch releases produce
+different bytes for an identical chart — `metadata={"Software": None}`, alongside SVG's
+`metadata={"Date": None}`. Two further implementation rules that the obvious code gets wrong: the
+hashsalt is namespaced through `matplotlib.rc_context` **per chart** rather than set once in global
+`rcParams`, which is the colliding case this section warns about; and `charts.py` does not import
+`pyplot`, whose global figure registry is a second place `rcParams` can be mutated from and would
+undo the scoping with no diff in the file that reads as if it owns it.
+
 **Untrusted text reaches the renderer.** §7.3 requires verbatim spans from 10-Ks to be
 printed. Jinja2 does *not* autoescape unless `select_autoescape` is set, and WeasyPrint has
 live CVEs in exactly this area:
@@ -1192,12 +1237,41 @@ Required: autoescape on, a **deny-by-default `url_fetcher`** so no remote resour
 resolved, presentational hints off, **WeasyPrint ≥69.0**. §7.6 hardens the prompt; this
 hardens the renderer, and both are needed.
 
-**Byte-identical output needs explicit config.** Both stages inject nondeterminism by
+Three refinements settled in M3. Autoescape is set **unconditionally**, not through
+`select_autoescape`, which chooses by file extension and would silently lose escaping on a template
+rename — a rename is not a change anyone reviews as a security edit. The version floor is asserted
+**in code as well as in the lockfile**, because a lockfile is a claim about one environment and the
+CVE it closes is the one that defeats the `url_fetcher` mitigation entirely. And the pin carries a
+`<70` ceiling: a renderer change is exactly what §11's byte-identical gate detects, so an open
+major turns the gate into a source of false alarms rather than leaving it unguarded.
+
+And note that untrusted text reaches an M3 report already, two milestones before the LLM: the
+company name and `sicDescription` come from SEC payloads, `--peers` and `--assumptions` come from
+the user, and all four are echoed onto the page. The stylesheet is a **static file** with no model
+value interpolated into it, which is what closes the CSS-injection context that autoescape does not
+cover.
+
+**Byte-identical output needs explicit config, and it is a per-machine claim.** Two runs of the
+same inputs on one machine are byte-identical and that is the §11 gate. Two runs on *different*
+machines are not, and cannot be made so without pinning a font file and a FreeType version into the
+repository: matplotlib rasterizes glyphs through whatever FreeType it was built against and
+WeasyPrint resolves `font-family` through the host's fontconfig. The gate is a regression detector
+— it catches "the renderer changed" — and it is not a reproducible-build claim. §12 records the
+gap, because a reader who assumes the stronger property will eventually publish a hash.
+
+Both stages inject nondeterminism by
 default: WeasyPrint writes `/CreationDate` and a document `/ID` (needs `SOURCE_DATE_EPOCH`),
 and matplotlib SVG emits `<dc:date>` plus random glyph `id`s (needs
 `rcParams["svg.hashsalt"]` pinned and `metadata={"Date": None}`). Note that a fixed
 hashsalt can collide across multiple charts composed into one document — namespace per
 chart. Without all of this the §11 determinism gate fails on day one.
+
+`SOURCE_DATE_EPOCH` is derived from **`as_of` at midnight UTC**, computed at the command boundary
+and passed in. Not `0`, which would date every report to 1970 and make the field actively
+misleading; not the wall clock, which breaks the gate. `as_of` is an input to the run, so a PDF
+whose creation date is `as_of` is a function of its inputs. The renderer sets and **restores** the
+variable around its own `write_pdf` call — a determinism setting the caller has to remember is one
+the next caller forgets, and M7's batch runner is the next caller.
 
 ### 9.1 Structure
 
@@ -1235,6 +1309,24 @@ questions 4 and 10 in `docs/m1/README.md`.
 
 Section 9 is not boilerplate. It's where the report earns trust, and it should be written
 to be read.
+
+**What M3 renders, and what it puts where a later milestone's content goes.** M3 builds sections 1,
+3, 4, 9 and 10. Sections 2, 5, 6, 7 and 8 are not stubbed — an empty "Verdict" page is worse than
+no verdict page — with one exception, and it needs stating because it is the only place this
+document commits to printing something it cannot compute. Section 1's **verdict badge reads `NOT
+ASSESSED`** with the milestone named, and no partial confidence rating is printed at all. Three of
+the confidence rating's five inputs already exist at M2 — metric coverage, quarters of history,
+data-integrity findings — which is exactly what makes a partial number dangerous rather than
+unavailable: it renders on the same 0–100 scale as the real one and is wrong in a direction nobody
+can see. The cover prints the **measured** coverage figure and quarter count instead, each with its
+denominator on the same line. The slot is present rather than absent for the reason §4.5's empty
+keys are declared rather than omitted.
+
+Two named gaps inside the sections M3 does build, so a reader comparing the report against this
+list can see they are known: section 3's *"multiples vs. peer percentiles"* needs M4's cohort, and
+section 4's **ROIC vs. WACC** needs M5's WACC — which is why ROADMAP M3's chart list is five, not
+the six above. Both render as stated omissions naming their milestone, in the same visual treatment
+as an absent metric, never as a blank.
 
 **On bull case / bear case.** Competing designs generate these by asking an LLM to write
 them, which makes the LLM the analyst. Section 2 gets the same *structure* — strongest
@@ -1304,13 +1396,22 @@ machine.
 | Quality scores | Hand-computed fixtures from real filings, cross-checked against a published screener. **Not** "worked examples from the original papers" — Piotroski (2000), Altman (1968) and Beneish (1999) are portfolio-sort and discriminant-function studies; none contains a per-firm step-by-step computation to copy. |
 | Flags | One test per rule, positive and negative. |
 | LLM | `null` provider in CI. Recorded-cassette tests for adapters. Citation verifier gets adversarial fixtures (fabricated quotes must be dropped). Injection fixtures with instructions embedded in filing text. |
-| Report | Render golden fixtures to PDF, assert page count. Overflow detection has no WeasyPrint API — use `Document.pages` box geometry against the page box, or golden-image diffing. Autoescape and `url_fetcher` denial tested with hostile fixtures. |
+| Report | Render golden fixtures to PDF, assert page count. Overflow detection has no WeasyPrint API — use `Document.pages` box geometry against the page box, or golden-image diffing. **Geometry, not golden images**: image diffing needs a font stack we do not control and its failures are uninterpretable without opening a picture, while a geometry walk fails for a reason you can read. Page count is asserted as a **band** for the full report and an **equality** for `--brief`, since "a 2-page summary" is a promise about the artifact rather than about its content. Autoescape and `url_fetcher` denial tested with hostile fixtures — a `submissions` payload with markup in the company name, and a hand-written HTML document carrying `https`, `file`, `data:` and protocol-relative URLs, which no template can produce and which is why the fetcher would otherwise be tested only against inputs that never reach it. |
 | End-to-end | Full run from cache fixtures for 3 tickers; determinism assertion — two runs, identical output hash. |
 
 Determinism is a CI gate: fixed MC seed, `SOURCE_DATE_EPOCH`, pinned `svg.hashsalt`, cached
 inputs, and `--llm none` must produce a byte-identical PDF (§9.0). The LLM path is brought
 under the same gate by caching responses keyed on `(prompt version, document hash, model
 id)` — otherwise it would be permanently exempt, which is where regressions hide.
+
+**Stated precisely, because the loose version fails for reasons that are not bugs:** two runs of
+`investo analyze TICKER --as-of DATE` against one cache, **on one machine**, with `--llm none`,
+produce byte-identical `report.pdf` and `report.json`. Each qualifier earns its place. Without an
+explicit `--as-of` the epoch is today's and two runs either side of midnight legitimately differ.
+After `--refresh` the cache carries new `fetched_at` values and the document is a function of the
+cache. Across machines, fonts and FreeType make it false (§9.0, §12). A second, narrower assertion
+compares one chart's bytes built twice, so a failure names the layer instead of leaving someone to
+bisect matplotlib against WeasyPrint by hand.
 
 ---
 
@@ -1331,6 +1432,18 @@ a later phase; several would materially move a valuation.
 - **Staleness** — if the latest 10-Q is more than 4 months old, the report flags it but does
   not extrapolate to fill the gap.
 - **Pension obligations, contingent liabilities, off-balance-sheet structures.**
+- **The overflow check depends on a WeasyPrint private attribute** (`Page._page_box`), because
+  §11 records that overflow detection has no public API. It will break on some future release. The
+  `>=69,<70` pin stops that arriving unannounced but does not remove it, so the mitigation is about
+  what the break *costs*: `report/render.py` degrades — `Rendered.overflowing` becomes `None`, the
+  command prints "layout check unavailable", and the user still gets a PDF — while one named test
+  fails loudly in the suite. Listed here because a private-API dependency that is only mentioned in
+  a comment is one nobody is tracking.
+- **Cross-machine byte-identity of the PDF.** §11's determinism gate is same-inputs,
+  same-machine. matplotlib rasterizes through the FreeType it was built against and WeasyPrint
+  resolves fonts through the host's fontconfig, so two machines produce different bytes for an
+  identical run. Closing it means vendoring a font file and pinning FreeType, which is a real
+  option and is not worth it for a regression detector. Listed here so nobody publishes a hash.
 
 ## 13. Open questions
 
@@ -1344,6 +1457,23 @@ personal-use only.
   still written, valuation omitted); 4 upstream fetch failure after retries; 5 config error
   (e.g. missing User-Agent). A missing required metric degrades coverage and confidence — it
   does not abort.
+- **Exit 3 in practice, from M3.** Two triggers: `companyfacts` absent for the CIK, and tier-1
+  annual coverage below a configured `coverage_floor`. **Not** "a section this build cannot
+  produce" — every M3 report omits the valuation, so reading the clause above that way would make
+  every run exit 3, and a code that fires on every invocation carries no information. An unbuilt
+  milestone is not insufficient data. The floor itself defaults to **unset**: §4.2 sanctions a
+  configurable floor and supplies no number, `docs/m2/COVERAGE.md` is the measurement that would,
+  and a default invented before the measurement fires arbitrarily — the same posture as
+  `pyproject.toml`'s `fail_under`. And the code is **returned after both files are written**,
+  because the clause above promises the report; a command that raises before writing turns the most
+  carefully worded code in this taxonomy into a lie.
+- **Report output path:** `out_dir/TICKER/AS_OF/report.{pdf,json}`. README fixes the two file names
+  and their adjacency and nothing above that. Flat output makes the second ticker overwrite the
+  first; keying on ticker alone makes tomorrow overwrite today, which destroys the input §4.5's
+  `investo diff` exists for. Keyed on `as_of` rather than run time, so re-running one
+  point-in-time reconstruction overwrites itself and the determinism gate is "run it twice and
+  compare the file". Both are written through a temporary file and `os.replace`, `report.json`
+  first — a half-written document that parses is worse than one that does not.
 - **Runtime target:** under 60s warm, under 5 min cold, excluding LLM calls.
 - **License:** Investo's own license is an open question — see §10 on why distribution is
   not a purely technical decision.

@@ -201,7 +201,6 @@ def test_config_error_message_goes_to_stderr(configured: None) -> None:
 @pytest.mark.parametrize(
     ("command", "milestone"),
     [
-        ("analyze AAPL", "M3"),
         ("backtest", "M7"),
     ],
 )
@@ -212,11 +211,11 @@ def test_stub_exits_70_and_names_its_milestone(
 
     Exit 70 rather than 0: a script must not read "parsed successfully" as "ran".
 
-    **`fetch` and `cache prune` left this list in M1 and `facts` left it in M2**, which is the intended
-    lifecycle — ROADMAP § Decided during design: *"Exit 70 for an unimplemented command... It
-    disappears with the last stub."* Removing a row here is what landing a milestone looks like, and
-    the two that remain are the ones M3 and M7 own. When the last one goes, `NotImplementedYetError`
-    and `ExitCode.NOT_IMPLEMENTED` go with it.
+    **`fetch` and `cache prune` left this list in M1, `facts` in M2 and `analyze` in M3**, which is
+    the intended lifecycle — ROADMAP § Decided during design: *"Exit 70 for an unimplemented
+    command... It disappears with the last stub."* Removing a row here is what landing a milestone
+    looks like. **`backtest` is the last one**, and when M7 lands, `NotImplementedYetError` and
+    `ExitCode.NOT_IMPLEMENTED` are deleted with it — along with this test and its companion below.
     """
     result = runner.invoke(app, command.split())
     assert result.exit_code == int(ExitCode.NOT_IMPLEMENTED)
@@ -238,6 +237,7 @@ def test_implemented_commands_do_not_report_not_implemented(configured: None) ->
     for command in (
         ["fetch", "AAPL"],
         ["facts", "AAPL"],
+        ["analyze", "AAPL"],
         ["cache", "prune", "--older-than", "90d"],
     ):
         result = runner.invoke(app, command)
@@ -252,14 +252,15 @@ def test_stub_is_reached_only_after_config_resolves() -> None:
     Otherwise a command would report "not implemented" for a run that would have failed at exit 5
     anyway, and the config layer would go unexercised.
 
-    Uses `analyze`, which is still a stub. It was written against `fetch` in M0 and moved to `facts`
-    in M1; M2 implementing `facts` is exactly why a test like this needs a subject that is still
-    unimplemented — the property is about the *ordering* of config resolution against the stub raise,
-    not about any one command.
+    Uses `backtest`, the last remaining stub. This test was written against `fetch` in M0, moved to
+    `facts` in M1 and to `analyze` in M2, and moves again here — which is the point: the property is
+    about the *ordering* of config resolution against the stub raise, not about any one command, so
+    its subject has to be whichever command is still unimplemented. When M7 lands it has no subject
+    and is deleted.
     """
-    result = runner.invoke(app, ["analyze", "AAPL"])
+    result = runner.invoke(app, ["backtest"])
     assert result.exit_code == int(ExitCode.CONFIG_ERROR)
-    assert "M3" not in result.output
+    assert "M7" not in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -275,11 +276,16 @@ def test_as_of_in_the_future_is_rejected(configured: None) -> None:
 
 
 def test_as_of_today_is_accepted(configured: None) -> None:
-    """The boundary is inclusive — today has happened."""
+    """The boundary is inclusive — today has happened.
+
+    Asserted as "not a config error" rather than as a specific code, because `analyze`'s body now
+    runs: with no network it will fail at 2 or 4 depending on how far it gets, and either is fine.
+    Exit 5 is the only wrong answer, and it is the one a `>` where `>=` belongs would produce.
+    """
     from datetime import date
 
     result = runner.invoke(app, ["analyze", "AAPL", "--as-of", date.today().isoformat()])
-    assert result.exit_code == int(ExitCode.NOT_IMPLEMENTED)
+    assert result.exit_code != int(ExitCode.CONFIG_ERROR)
 
 
 @pytest.mark.parametrize("value", ["01-01-2020", "2020/01/01", "yesterday"])
@@ -296,7 +302,7 @@ def test_lookback_below_the_minimum_is_rejected(configured: None) -> None:
 
 def test_peers_accepts_a_comma_separated_list(configured: None) -> None:
     result = runner.invoke(app, ["analyze", "AAPL", "--peers", "MSFT,GOOG,AMZN"])
-    assert result.exit_code == int(ExitCode.NOT_IMPLEMENTED)
+    assert result.exit_code != int(ExitCode.CONFIG_ERROR)
 
 
 def test_peers_rejects_an_empty_entry(configured: None) -> None:
@@ -399,10 +405,12 @@ def test_main_returns_the_exit_code(configured: None) -> None:
     """`main` reports codes rather than raising, so `python -m investo` and the console script
     agree.
 
-    `analyze` rather than `fetch` or `facts`: both of those are implemented now, and this test needs a
-    command whose exit code is known without a network round trip.
+    `backtest` rather than `fetch`, `facts` or `analyze`: the other three are implemented now, and
+    this test needs a command whose exit code is known without a network round trip. It has moved
+    once per milestone for that reason, and M7 will have to give it a different subject — a
+    `--config` pointing at a missing file, most likely, which is exit 5 with no network either.
     """
-    assert main(["analyze", "AAPL"]) == int(ExitCode.NOT_IMPLEMENTED)
+    assert main(["backtest"]) == int(ExitCode.NOT_IMPLEMENTED)
 
 
 def test_main_returns_zero_for_help() -> None:

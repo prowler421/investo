@@ -1,0 +1,60 @@
+{# `--brief`: two pages. The cover, and one page of snapshot + revenue + coverage.
+
+   It selects this template and nothing else. The same `ReportModel` is built either way, with the
+   same values, so a figure cannot appear in the full report and disagree with the brief —
+   `report.json` is byte-identical between the two, and a test asserts it.
+
+   Two pages is asserted as an *equality*, unlike the full report's band: README promises "a 2-page
+   summary", which is a promise about the artifact rather than about its content. #}
+{% import "_macros.html.j2" as m %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{{ model.cover.ticker }} — {{ model.cover.name }} — brief — {{ model.cover.as_of }}</title>
+  <meta name="generator" content="{{ model.run.generated_by }}">
+</head>
+<body>
+
+<section class="cover">
+  <p class="eyebrow">Fundamental due diligence · brief · SEC filings only</p>
+  <h1>{{ model.cover.ticker }}</h1>
+  <p class="company">{{ model.cover.name }}</p>
+  <p class="asof">as of {{ model.cover.as_of }}</p>
+
+  <div class="badges">
+    <div class="badge">
+      <span class="badge-label">Assessment</span>
+      <span class="badge-value">{{ model.cover.verdict }}</span>
+      <span class="badge-note">{{ model.cover.verdict_note }}</span>
+    </div>
+  </div>
+
+  <ul class="measured">
+    <li>{{ model.cover.coverage_line }}</li>
+    <li>{{ model.cover.quarters_line }}</li>
+  </ul>
+
+  <p class="disclaimer">{{ model.cover.disclaimer }}</p>
+</section>
+
+<section class="page">
+  <h2>Snapshot</h2>
+  {{ m.pairs(model.snapshot.rows) }}
+
+  {# The revenue chart only. `charts` is ordered by `report/model.py`; the brief takes the first,
+     which is the one figure a two-page summary can afford and the one every reader looks at. #}
+  {% for image in model.history.charts %}{% if loop.first %}{{ m.chart(image) }}{% endif %}{% endfor %}
+
+  <p class="footnote">Denominator: {{ model.caveats.spine_origin }}.</p>
+  {% if model.caveats.spine_warning %}{{ m.omission(model.caveats.spine_warning) }}{% endif %}
+
+  <p class="footnote">
+    This is a summary. The full report carries the coverage table, every finding, and the source
+    appendix — run without <code>--brief</code>.
+  </p>
+  <p class="disclaimer">{{ model.cover.disclaimer }}</p>
+</section>
+
+</body>
+</html>

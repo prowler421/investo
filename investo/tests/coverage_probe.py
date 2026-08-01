@@ -77,8 +77,9 @@ REPORT_OUT_VAR: Final = "COVERAGE_REPORT_OUT"
 
 # The seven companies whose payloads are checked in as fixtures. Excluded from the universe so the
 # measurement is out-of-sample against the chains — which were written while looking at them.
-FIXTURE_CIKS: Final[frozenset[int]] = frozenset({320193, 2093536, 1000045, 1000046, 1908259,
-                                                 36104, 1063761})
+FIXTURE_CIKS: Final[frozenset[int]] = frozenset(
+    {320193, 2093536, 1000045, 1000046, 1908259, 36104, 1063761}
+)
 
 ANNUAL_FORMS: Final = frozenset({"10-K", "10-KT"})
 QUARTERLY_FORMS: Final = frozenset({"10-Q", "10-QT"})
@@ -105,25 +106,37 @@ REIT_SIC: Final = 6798
 # measuring a different question than the one the chains ask.
 
 TIER1: Final[Mapping[str, tuple[str, ...]]] = {
-    "revenue": ("RevenueFromContractWithCustomerExcludingAssessedTax",
-                "RevenueFromContractWithCustomerIncludingAssessedTax",
-                "Revenues", "SalesRevenueNet"),
+    "revenue": (
+        "RevenueFromContractWithCustomerExcludingAssessedTax",
+        "RevenueFromContractWithCustomerIncludingAssessedTax",
+        "Revenues",
+        "SalesRevenueNet",
+    ),
     "net_income": ("NetIncomeLoss", "ProfitLoss"),
     "gross_profit": ("GrossProfit",),
     "operating_income": ("OperatingIncomeLoss",),
     "assets": ("Assets",),
     "liabilities": ("Liabilities", "LiabilitiesAndStockholdersEquity"),
-    "equity": ("StockholdersEquity",
-               "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"),
+    "equity": (
+        "StockholdersEquity",
+        "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+    ),
     "cash": ("CashAndCashEquivalentsAtCarryingValue",),
-    "operating_cash_flow": ("NetCashProvidedByUsedInOperatingActivities",
-                            "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations"),
-    "capex": ("PaymentsToAcquirePropertyPlantAndEquipment",
-              "PaymentsToAcquireProductiveAssets",
-              "PaymentsToAcquirePropertyPlantAndEquipmentAndIntangibleAssets",
-              "PaymentsForCapitalImprovements"),
-    "long_term_debt": ("LongTermDebtNoncurrent", "LongTermDebt",
-                       "LongTermDebtAndCapitalLeaseObligations"),
+    "operating_cash_flow": (
+        "NetCashProvidedByUsedInOperatingActivities",
+        "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations",
+    ),
+    "capex": (
+        "PaymentsToAcquirePropertyPlantAndEquipment",
+        "PaymentsToAcquireProductiveAssets",
+        "PaymentsToAcquirePropertyPlantAndEquipmentAndIntangibleAssets",
+        "PaymentsForCapitalImprovements",
+    ),
+    "long_term_debt": (
+        "LongTermDebtNoncurrent",
+        "LongTermDebt",
+        "LongTermDebtAndCapitalLeaseObligations",
+    ),
     "shares_diluted_weighted": ("WeightedAverageNumberOfDilutedSharesOutstanding",),
     "eps_diluted": ("EarningsPerShareDiluted", "EarningsPerShareBasicAndDiluted"),
 }
@@ -132,19 +145,33 @@ TIER2: Final[Mapping[str, tuple[str, ...]]] = {
     "assets_current": ("AssetsCurrent",),
     "liabilities_current": ("LiabilitiesCurrent",),
     "retained_earnings": ("RetainedEarningsAccumulatedDeficit",),
-    "receivables": ("AccountsReceivableNetCurrent", "ReceivablesNetCurrent",
-                    "AccountsReceivableGrossCurrent"),
+    "receivables": (
+        "AccountsReceivableNetCurrent",
+        "ReceivablesNetCurrent",
+        "AccountsReceivableGrossCurrent",
+    ),
     "cogs": ("CostOfGoodsAndServicesSold", "CostOfRevenue", "CostOfGoodsSold", "CostOfServices"),
-    "sga": ("SellingGeneralAndAdministrativeExpense", "GeneralAndAdministrativeExpense",
-            "SellingAndMarketingExpense"),
-    "depreciation_amortization": ("DepreciationDepletionAndAmortization",
-                                  "DepreciationAmortizationAndAccretionNet", "Depreciation"),
-    "interest_expense": ("InterestExpense", "InterestExpenseNonoperating",
-                         "InterestIncomeExpenseNet"),
+    "sga": (
+        "SellingGeneralAndAdministrativeExpense",
+        "GeneralAndAdministrativeExpense",
+        "SellingAndMarketingExpense",
+    ),
+    "depreciation_amortization": (
+        "DepreciationDepletionAndAmortization",
+        "DepreciationAmortizationAndAccretionNet",
+        "Depreciation",
+    ),
+    "interest_expense": (
+        "InterestExpense",
+        "InterestExpenseNonoperating",
+        "InterestIncomeExpenseNet",
+    ),
     "sbc": ("ShareBasedCompensation", "AllocatedShareBasedCompensationExpense"),
     "operating_lease_liability": ("OperatingLeaseLiabilityNoncurrent", "OperatingLeaseLiability"),
-    "share_issuance_proceeds": ("ProceedsFromIssuanceOfCommonStock",
-                                "ProceedsFromIssuanceOrSaleOfEquity"),
+    "share_issuance_proceeds": (
+        "ProceedsFromIssuanceOfCommonStock",
+        "ProceedsFromIssuanceOrSaleOfEquity",
+    ),
 }
 
 # The cover-page share count is tier 1 but lives in `dei`, so it is keyed separately.
@@ -170,13 +197,13 @@ class Name:
     cik: int
     name: str
     sic: int | None
-    quintile: int                 # 1 = largest, 5 = smallest
-    market_cap_usd: int | None    # None where no cover-page share count was published
-    first_filing: date | None     # for the sub-3y criterion
+    quintile: int  # 1 = largest, 5 = smallest
+    market_cap_usd: int | None  # None where no cover-page share count was published
+    first_filing: date | None  # for the sub-3y criterion
     note: str = ""
 
 
-SELECTED_ON: Final = date(1970, 1, 1)   # replaced by select_universe()'s output
+SELECTED_ON: Final = date(1970, 1, 1)  # replaced by select_universe()'s output
 
 UNIVERSE: Final[tuple[Name, ...]] = ()
 """The pinned twenty. Empty until :func:`select_universe` has been run once.
@@ -262,7 +289,9 @@ class Filer:
 
 
 def _spine(
-    filings: Sequence[FilingRow], *, window: tuple[date, date],
+    filings: Sequence[FilingRow],
+    *,
+    window: tuple[date, date],
 ) -> tuple[set[date], set[date]]:
     """Period ends the filer actually reported, per ``docs/m2/03-statements.md`` §2.
 
@@ -355,7 +384,8 @@ def _fetch_one(client: edgar.EdgarClient, cik: int) -> tuple[CompanyFacts, Seque
 
     cf = client.get(edgar.companyfacts_url(cik))
     facts = parse_companyfacts(
-        cf.body, source=SourceContext(url=cf.url, fetched_at=cf.fetched_at, cik=cik),
+        cf.body,
+        source=SourceContext(url=cf.url, fetched_at=cf.fetched_at, cik=cik),
     )
     return facts, filings
 
@@ -371,8 +401,12 @@ def _iter_filers(window: tuple[date, date]) -> Iterator[Filer]:
         for entry in _require_universe():
             facts, filings = _fetch_one(client, entry.cik)
             yield measure(
-                ticker=entry.ticker, cik=entry.cik, quintile=entry.quintile,
-                facts=facts, filings=filings, window=window,
+                ticker=entry.ticker,
+                cik=entry.cik,
+                quintile=entry.quintile,
+                facts=facts,
+                filings=filings,
+                window=window,
             )
 
 

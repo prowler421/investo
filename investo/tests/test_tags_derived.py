@@ -370,18 +370,26 @@ def test_a_derivation_over_mismatched_units_does_not_fire() -> None:
     spec = _spec_for(Metric.GROSS_PROFIT)
     revenue = _fact(Metric.REVENUE, "1000")
 
-    assert derive(
-        spec,
-        resolved=_resolved(revenue, _fact(Metric.COGS, "400", unit="EUR")),
-        raw={},
-        periods=[PERIOD],
-    ) == ()
-    assert derive(
-        spec,
-        resolved=_resolved(_fact(Metric.REVENUE, "1000", unit="EUR"), _fact(Metric.COGS, "400")),
-        raw={},
-        periods=[PERIOD],
-    ) == ()
+    assert (
+        derive(
+            spec,
+            resolved=_resolved(revenue, _fact(Metric.COGS, "400", unit="EUR")),
+            raw={},
+            periods=[PERIOD],
+        )
+        == ()
+    )
+    assert (
+        derive(
+            spec,
+            resolved=_resolved(
+                _fact(Metric.REVENUE, "1000", unit="EUR"), _fact(Metric.COGS, "400")
+            ),
+            raw={},
+            periods=[PERIOD],
+        )
+        == ()
+    )
 
 
 @pytest.mark.spec
@@ -440,12 +448,15 @@ def test_eps_is_not_derived_from_a_denominator_in_the_wrong_unit() -> None:
     spec = _spec_for(Metric.EPS_DILUTED)
     numerator, denominator = spec.metric_inputs
 
-    assert derive(
-        spec,
-        resolved=_resolved(_fact(numerator, "1000"), _fact(denominator, "250", unit="USD")),
-        raw={},
-        periods=[PERIOD],
-    ) == ()
+    assert (
+        derive(
+            spec,
+            resolved=_resolved(_fact(numerator, "1000"), _fact(denominator, "250", unit="USD")),
+            raw={},
+            periods=[PERIOD],
+        )
+        == ()
+    )
 
 
 def test_eps_is_not_derived_from_a_zero_share_count() -> None:
@@ -458,12 +469,15 @@ def test_eps_is_not_derived_from_a_zero_share_count() -> None:
     spec = _spec_for(Metric.EPS_DILUTED)
     numerator, denominator = spec.metric_inputs
 
-    assert derive(
-        spec,
-        resolved=_resolved(_fact(numerator, "1000"), _fact(denominator, "0", unit="shares")),
-        raw={},
-        periods=[PERIOD],
-    ) == ()
+    assert (
+        derive(
+            spec,
+            resolved=_resolved(_fact(numerator, "1000"), _fact(denominator, "0", unit="shares")),
+            raw={},
+            periods=[PERIOD],
+        )
+        == ()
+    )
 
 
 # ---------------------------------------------------------------------------

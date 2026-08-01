@@ -126,10 +126,7 @@ def test_archives_doc_url_uses_the_unpadded_cik_and_the_undashed_accession() -> 
     the two halves fail independently: a padded CIK 404s, and a dashed accession directory 404s, and
     neither says which one was wrong.
     """
-    expected = (
-        "https://www.sec.gov/Archives/edgar/data/320193/"
-        "000032019325000079/aapl-20250628.htm"
-    )
+    expected = "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/aapl-20250628.htm"
     assert archives_doc_url(APPLE, ACCESSION, "aapl-20250628.htm") == expected
 
 

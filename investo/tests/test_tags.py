@@ -209,9 +209,7 @@ def test_only_capex_and_interest_expense_impose_a_sign_convention() -> None:
     report negatives, and a flag that fires on healthy filers is worse than no flag.
     """
     conventions = {
-        metric: chain.sign
-        for metric, chain in CHAINS.items()
-        if chain.sign.imposes_a_convention
+        metric: chain.sign for metric, chain in CHAINS.items() if chain.sign.imposes_a_convention
     }
     assert conventions == {
         Metric.CAPEX: Sign.OUTFLOW_POSITIVE,
@@ -384,9 +382,10 @@ def test_chain_index_is_the_position_that_won() -> None:
     )
     indices = [item.chain_index for item in resolve(Metric.REVENUE, facts, periods=periods)]
     chain = chain_for(Metric.REVENUE)
-    assert indices == [chain.index_of("SalesRevenueNet"), chain.index_of(
-        "RevenueFromContractWithCustomerExcludingAssessedTax"
-    )]
+    assert indices == [
+        chain.index_of("SalesRevenueNet"),
+        chain.index_of("RevenueFromContractWithCustomerExcludingAssessedTax"),
+    ]
     assert indices[0] != indices[1]
 
 
@@ -625,7 +624,9 @@ def test_a_flip_produces_a_derivation_naming_the_convention() -> None:
     assert isinstance(flipped.source, Derivation)
     assert flipped.source.rule == "sign_normalized"
     assert len(flipped.source.refs()) == 1
-    assert series.annual.sign_anomalies == 0, "a flipped fact obeying the convention is not an anomaly"
+    assert series.annual.sign_anomalies == 0, (
+        "a flipped fact obeying the convention is not an anomaly"
+    )
 
 
 @pytest.mark.spec

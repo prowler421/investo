@@ -17,6 +17,7 @@ from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
+from itertools import pairwise
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -229,7 +230,7 @@ def test_every_adapter_satisfies_the_same_contract(fetched: Fetched) -> None:
     days = [bar.day for bar in series.bars]
 
     assert days, "an empty series makes every assertion below vacuous"
-    assert all(earlier < later for earlier, later in zip(days, days[1:], strict=False))
+    assert all(earlier < later for earlier, later in pairwise(days))
     assert len(set(days)) == len(days)
     assert all(START <= day <= END for day in days)
     assert series.adjusted == all(bar.adj_close is not None for bar in series.bars)

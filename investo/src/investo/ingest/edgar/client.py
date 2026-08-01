@@ -217,10 +217,7 @@ def archives_doc_url(cik: int, accession: Accession, document: str) -> str:
     is the opposite of what ``data.sec.gov`` wants for each. This is the pairing ROADMAP M1 names
     as a risk, because getting either wrong is a 404 that looks like missing data.
     """
-    return (
-        f"{_WWW_HOST}/Archives/edgar/data/{archives_cik(cik)}/"
-        f"{accession.nodashes}/{document}"
-    )
+    return f"{_WWW_HOST}/Archives/edgar/data/{archives_cik(cik)}/{accession.nodashes}/{document}"
 
 
 def tickers_exchange_url() -> str:
@@ -488,9 +485,7 @@ class EdgarClient:
             last_error = f"HTTP {status}"
             if attempt == self._max_attempts:
                 break
-            self._clock.sleep(
-                self._backoff(attempt, retry_after=_retry_after(raw.headers, status))
-            )
+            self._clock.sleep(self._backoff(attempt, retry_after=_retry_after(raw.headers, status)))
 
         elapsed = self._clock.monotonic() - self._started
         if last_error.startswith("HTTP 429") or last_error == "HTTP 403":

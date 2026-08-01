@@ -264,7 +264,9 @@ def test_report_date_off_by_one_still_counts() -> None:
     coverage = history("NOQ4.trimmed.json", filings=filings).coverage.annual[Metric.REVENUE]
     assert coverage.expected == 1
     assert coverage.filled == 1
-    assert coverage.spine_date_inexact == 1, "counted, because a systematic disagreement is a finding"
+    assert coverage.spine_date_inexact == 1, (
+        "counted, because a systematic disagreement is a finding"
+    )
 
 
 @pytest.mark.spec

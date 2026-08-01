@@ -83,7 +83,9 @@ def parse_tickers(body: bytes, *, source: SourceContext) -> tuple[TickerRow, ...
     fields = require(payload, "fields", where="company_tickers_exchange.json")
     data = require(payload, "data", where="company_tickers_exchange.json")
     if not isinstance(fields, list) or not isinstance(data, list):
-        raise UpstreamFetchError("company_tickers_exchange.json: `fields` and `data` must be lists.")
+        raise UpstreamFetchError(
+            "company_tickers_exchange.json: `fields` and `data` must be lists."
+        )
 
     index = {str(name): position for position, name in enumerate(fields)}
     missing = [name for name in _REQUIRED_FIELDS if name not in index]

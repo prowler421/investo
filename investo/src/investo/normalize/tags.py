@@ -519,7 +519,9 @@ _TIER_1: Final[tuple[Chain, ...]] = (
         # spelling it a second time in this file would put the same string in two places, which is
         # how the two come to disagree.
         metric=Metric.SHARES_COVER,
-        members=(Member(COVER_SHARES_TAXONOMY, COVER_SHARES_TAG, note="cover page; market cap only"),),
+        members=(
+            Member(COVER_SHARES_TAXONOMY, COVER_SHARES_TAG, note="cover page; market cap only"),
+        ),
         aggregation=Aggregation.INSTANT,
         unit="shares",
         tier=Tier.DCF,
@@ -889,7 +891,9 @@ def resolve_series(
     """
     chain = chain_for(metric)
     requested = _ordered_periods(periods)
-    resolutions = tuple(_resolve_one(chain, facts, period, excluded=frozenset()) for period in requested)
+    resolutions = tuple(
+        _resolve_one(chain, facts, period, excluded=frozenset()) for period in requested
+    )
 
     switches: list[ExclusivitySwitch] = []
     collapsed: list[str] = []
@@ -1065,7 +1069,9 @@ def _ordered_periods(periods: Iterable[FiscalPeriod]) -> tuple[FiscalPeriod, ...
     unique = {(period.end, period.kind): period for period in periods}
     return tuple(
         unique[key]
-        for key in sorted(unique, key=lambda pair: (pair[0], pair[1], unique[pair].start or date.min))
+        for key in sorted(
+            unique, key=lambda pair: (pair[0], pair[1], unique[pair].start or date.min)
+        )
     )
 
 
@@ -1193,7 +1199,7 @@ def _majority_member(
     chain: Chain, resolutions: Sequence[Resolution], present: frozenset[str]
 ) -> str:
     """The member with the most periods resolved; ties break to the earlier chain index."""
-    counts = {tag: 0 for tag in present}
+    counts = dict.fromkeys(present, 0)
     for resolution in resolutions:
         tag = _primary_tag(chain, resolution)
         if tag in counts:

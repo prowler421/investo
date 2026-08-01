@@ -5,17 +5,27 @@ Guidance for Claude Code (and other AI assistants) contributing to **investo**.
 ## What this project is
 
 Investo turns a NASDAQ ticker into a fundamental due-diligence PDF built from SEC filings. It
-is currently at **M2 built**. `investo fetch TICKER`, `investo facts TICKER` and
-`investo cache prune` work: EDGAR and price payloads are fetched through a rate-limited choke
-point, cached immutably, parsed into typed rows keyed by XBRL tag, and normalized into per-metric
-annual and quarterly series in which every figure traces to an accession and a tag. `facts --json`
-emits DESIGN §4.5's `report.json`, which is under the §11 determinism gate. Nothing is analyzed or
-rendered yet — `analyze` and `backtest` parse their full flag surface and exit 70 naming the
-milestone that fills them in.
+is currently at **M3 built**. `investo fetch TICKER`, `investo facts TICKER`,
+`investo analyze TICKER` and `investo cache prune` work: EDGAR and price payloads are fetched
+through a rate-limited choke point, cached immutably, parsed into typed rows keyed by XBRL tag,
+normalized into per-metric annual and quarterly series in which every figure traces to an accession
+and a tag, and rendered to `report.pdf` + `report.json` under the §11 determinism gate. **The PDF is
+historical only** — sections 1, 3, 4, 9 and 10; there is no forecast, score, peer cohort, event feed
+or narrative, the cover's verdict badge reads `NOT ASSESSED`, and the caveats section names each
+absence and its milestone. `backtest` parses its full flag surface and exits 70.
 
-M2's design is in [`docs/m2/`](docs/m2/README.md) and its seventeen spec questions were accepted on
-review; the decisions are in DESIGN §3.2, §4.2, §4.2.1, §4.5, §11 and ROADMAP § Decided during
-design. Read `docs/m2/README.md` before touching `normalize/`.
+M2's design is in [`docs/m2/`](docs/m2/README.md) (seventeen spec questions, accepted on review) and
+M3's is in [`docs/m3/`](docs/m3/README.md) (fifteen). The decisions are in DESIGN §3.1, §3.2, §4.2,
+§4.2.1, §4.5, §9.0, §9.1, §11, §12, §14 and ROADMAP § Decided during design. Read
+`docs/m2/README.md` before touching `normalize/` and `docs/m3/README.md` before touching `report/`.
+
+**Three research workstreams are open**, and none has a green test to declare it finished: M2's
+fixture curation and twenty-name coverage measurement (see below), and **M3's
+matplotlib→WeasyPrint spike**. `docs/m3/SPIKE.md` is the record and is unwritten;
+`tests/spike_renderer.py` is the runnable probe, marked `spike` and deselected by default. Until it
+runs, **every chart is a PNG on the interim decision recorded in `docs/m3/README.md` § 7 question
+4**, not on evidence — and `ChartFormat` is per-chart precisely so a promotion is one line in a diff
+that names it.
 
 **Two M2 workstreams are research and are not done**, and both are recorded rather than assumed:
 the curated real-filing fixtures (so DESIGN §11's *"assert exact expected series"* is still
@@ -48,6 +58,7 @@ src/investo/
 ├── errors.py         # ExitCode (DESIGN §14) + the exception hierarchy      [M0]
 ├── fetch.py          # `investo fetch` orchestration, summary, absences     [M1]
 ├── facts.py          # `investo facts` orchestration, table, --json         [M2]
+├── analyze.py        # `investo analyze` orchestration, output paths, exit 3 [M3]
 ├── domain/           # models, periods, provenance — frozen, zero I/O       [M1]
 ├── ingest/
 │   ├── cache.py      # content-addressed, append-only, manifest hash        [M1]
@@ -59,14 +70,23 @@ src/investo/
 │   ├── facts.py      # as_of, dedup, buckets, residual recovery             [M2]
 │   └── statements.py # FinancialHistory, the period spine, coverage         [M2]
 └── report/
-    └── serialize.py  # report.json; charts and render arrive in M3          [M2]
-tests/                # pytest — ~40 modules, fixtures, AST layering rules
+    ├── serialize.py  # report.json — the run record                         [M2]
+    ├── format.py     # Decimal -> str; the only place a number becomes text [M3]
+    ├── model.py      # ReportModel — what a template is allowed to see      [M3]
+    ├── charts.py     # matplotlib; the only float in the package            [M3]
+    ├── render.py     # Jinja2 -> HTML -> WeasyPrint -> PDF                  [M3]
+    └── templates/    # report/brief/_macros .html.j2, report.css
+tests/                # pytest — ~48 modules, fixtures, AST layering rules
 ```
 
 DESIGN §3.1 shows the full module tree. **It is created per milestone, not up front.** An empty
 package cannot be type-checked or tested, and goes stale before it is filled. M1 added `domain/`
-and `ingest/`, M2 added `normalize/` and `report/`, M3 adds `report/`'s charts and templates, and
-so on. `report/` holding one module after M2 is ROADMAP M2's stated intent, not an omission.
+and `ingest/`, M2 added `normalize/` and `report/`, M3 filled `report/` in, M4 adds `analysis/`,
+and so on. `report/` holding one module after M2 was ROADMAP M2's stated intent, not an omission.
+
+**`analysis/`, not `analyze/`,** for M4's package — DESIGN §3.1 originally drew the latter, and
+`analyze.py` (the M3 command body, which must sit at the package root because a layering test says
+so) is the same import name. Decided while designing M3.
 
 Two places where the code deliberately differs from the documents, both recorded in
 ROADMAP § Decided during design:
@@ -122,11 +142,33 @@ ROADMAP § Decided during design:
     of midnight differ, which the determinism gate reports as a bug that isn't one. Which modules may
     read one is pinned by `test_layering::test_only_a_command_body_reads_a_clock` rather than listed
     here, because a list here goes stale the milestone after it is written.
-12. **Determinism is a feature, and it is configured up front** (M3). `SOURCE_DATE_EPOCH`,
-    pinned `svg.hashsalt`, `metadata={"Date": None}`, and the LLM response cache keyed on
-    `(prompt version, document hash, model id)` so the LLM path is inside the determinism gate
-    rather than exempt from it. Two runs must produce a byte-identical PDF. `report.json` is
-    already under the gate from M2.
+12. **Determinism is a feature, and it is configured up front** (M3). `SOURCE_DATE_EPOCH` derived
+    from `as_of` and restored after use, per-chart `svg.hashsalt` through `rc_context`,
+    `metadata={"Date": None}` for SVG and `{"Software": None}` for PNG, and (from M6) the LLM
+    response cache keyed on `(prompt version, document hash, model id)` so the LLM path is inside
+    the gate rather than exempt from it. **Two runs of the same inputs on one machine** must
+    produce a byte-identical PDF — the cross-machine version is false and is recorded in DESIGN
+    §12, so do not assert it and do not publish a hash.
+13. **`report/charts.py` is the only module in the package that may construct a `float`** (from
+    M3), and inside it every `float()` call must be lexically inside `coord()`, with every float
+    literal a named module-level constant. matplotlib cannot plot a `Decimal`; a plotted coordinate
+    is a *position* and is allowed to be approximate. What is not allowed is that number coming
+    back out as text — every visible figure, axis tick labels included, is formatted from the
+    `Decimal` by `report/format.py`. The float positions a mark; it never produces a printed
+    figure.
+14. **No template may perform arithmetic, and no template receives a number** (from M3).
+    `report/model.py` hands the template pre-formatted strings. A figure computed in a template has
+    no `Fact` behind it, is absent from `report.json`, and is invisible to every test that walks
+    the model — and it is the most natural thing to write when the template is two lines from the
+    data. Checked by parsing each template with Jinja's own parser and failing on an arithmetic
+    node.
+15. **Nothing under `normalize/` or `report/` may import `numpy`** (from M3). It arrives
+    transitively with matplotlib, two milestones before ROADMAP declares it, and a `numpy.float64`
+    passes both float detectors — it is constructed by no `float()` call and contains no float
+    literal.
+16. **A chart takes `Fact`s, never numbers** (from M3). There is no overload accepting bare
+    coordinates, so a caller with a number and no provenance cannot draw it. This is a signature,
+    not a check: the failure it prevents has no test that would catch it.
 
 ## Coding standards
 
@@ -149,7 +191,14 @@ ROADMAP § Decided during design:
   it fails.** A happy-path test passes whether or not the guarantee is enforced.
 - Boundaries get their own test. "Minimum 3y" needs 3y asserted as *accepted*, or a `>` where
   `>=` belongs survives every test that only probes 1y and 5y.
-- `make check` must be green before work is done.
+- `make check` must be green before work is done. **It first actually ran in M3** — M1 and M2 were
+  written in an environment that could not install dependencies, so "built" meant reviewed rather
+  than verified for those milestones. Do not write "built" for code no gate has seen.
+- **Type-checker suppressions are scoped and carry their reason.** `reportUnknown*` is off under
+  `ingest/` only (untyped SEC JSON is those parsers' *input*; they emit typed rows), via an
+  execution environment in `pyproject.toml`. matplotlib, WeasyPrint and `yfinance` get file-level
+  comments naming the missing stubs. Everything else stays strict, and a new blanket suppression is
+  a design change rather than a fix.
 
 ## Dependency management
 
@@ -173,4 +222,6 @@ in the code that diverges from DESIGN.md is a spec question — raise it.
 - [ ] No new dependency without the milestone that needs it.
 - [ ] No `us-gaap` literal outside `normalize/tags.py`; no clock read, `float`, or keyless sort
       under `normalize/` or `report/`.
+- [ ] No `float` outside `report/charts.py`'s `coord()`; no arithmetic and no bare number in a
+      template; no `numpy` import under `normalize/` or `report/`.
 - [ ] `make check` passes.

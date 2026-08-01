@@ -163,7 +163,7 @@ def _table(history: FinancialHistory, bucket: Bucket) -> list[str]:
         return [f"  {bucket}: no periods"]
 
     width = 12
-    head = f"  {str(bucket):<26}" + "".join(f"{_label(day, bucket):>{width}}" for day in periods)
+    head = f"  {bucket!s:<26}" + "".join(f"{_label(day, bucket):>{width}}" for day in periods)
     lines = [f"{head}    tag"]
     for metric in _metric_order():
         facts = history.series(metric, bucket)

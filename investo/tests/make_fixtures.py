@@ -87,7 +87,9 @@ def fact(
     return row
 
 
-def tagged(units: dict[str, list[dict[str, Any]]], *, label: str = "", desc: str = "") -> dict[str, Any]:
+def tagged(
+    units: dict[str, list[dict[str, Any]]], *, label: str = "", desc: str = ""
+) -> dict[str, Any]:
     return {"label": label, "description": desc, "units": units}
 
 
@@ -280,7 +282,12 @@ def _aapl() -> dict[str, Any]:
                     }
                 ),
                 "Assets": tagged(
-                    {"USD": [fact(val=338516000000, end="2019-09-28"), fact(val=365725000000, end="2018-09-29")]}
+                    {
+                        "USD": [
+                            fact(val=338516000000, end="2019-09-28"),
+                            fact(val=365725000000, end="2018-09-29"),
+                        ]
+                    }
                 ),
                 "WeightedAverageNumberOfDilutedSharesOutstanding": tagged(
                     {
@@ -314,8 +321,12 @@ def _bank() -> dict[str, Any]:
         "Example Bancorp Inc.",
         {
             "us-gaap": {
-                "Revenues": tagged({"USD": annual_series([("2018-01-01", "2018-12-31", 4820000000)])}),
-                "NetIncomeLoss": tagged({"USD": annual_series([("2018-01-01", "2018-12-31", 1210000000)])}),
+                "Revenues": tagged(
+                    {"USD": annual_series([("2018-01-01", "2018-12-31", 4820000000)])}
+                ),
+                "NetIncomeLoss": tagged(
+                    {"USD": annual_series([("2018-01-01", "2018-12-31", 1210000000)])}
+                ),
                 "Assets": tagged({"USD": [fact(val=94300000000, end="2018-12-31")]}),
                 "Liabilities": tagged({"USD": [fact(val=83100000000, end="2018-12-31")]}),
             },
@@ -335,8 +346,12 @@ def _reit() -> dict[str, Any]:
         "Example Properties Trust",
         {
             "us-gaap": {
-                "Revenues": tagged({"USD": annual_series([("2018-01-01", "2018-12-31", 5580000000)])}),
-                "NetIncomeLoss": tagged({"USD": annual_series([("2018-01-01", "2018-12-31", 1470000000)])}),
+                "Revenues": tagged(
+                    {"USD": annual_series([("2018-01-01", "2018-12-31", 5580000000)])}
+                ),
+                "NetIncomeLoss": tagged(
+                    {"USD": annual_series([("2018-01-01", "2018-12-31", 1470000000)])}
+                ),
                 "Assets": tagged({"USD": [fact(val=35600000000, end="2018-12-31")]}),
                 # No PaymentsToAcquirePropertyPlantAndEquipment: REITs tag acquisitions differently.
             },
@@ -521,13 +536,68 @@ def _ytdonly() -> dict[str, Any]:
     and the YTD fact is dropped and counted, never reconciled.
     """
     rows = [
-        fact(start="2023-01-01", end="2023-03-31", val=100000000, fy=2023, fp="Q1", form="10-Q", filed="2023-05-04"),
-        fact(start="2023-01-01", end="2023-06-30", val=210000000, fy=2023, fp="Q2", form="10-Q", filed="2023-08-04"),
-        fact(start="2023-01-01", end="2023-09-30", val=330000000, fy=2023, fp="Q3", form="10-Q", filed="2023-11-03"),
-        fact(start="2023-01-01", end="2023-12-31", val=460000000, fy=2023, fp="FY", filed="2024-02-20"),
-        fact(start="2024-01-01", end="2024-03-31", val=118000000, fy=2024, fp="Q1", form="10-Q", filed="2024-05-03"),
-        fact(start="2024-01-01", end="2024-06-30", val=245000000, fy=2024, fp="Q2", form="10-Q", filed="2024-08-02"),
-        fact(start="2024-04-01", end="2024-06-30", val=127000000, fy=2024, fp="Q2", form="10-Q", filed="2024-08-02"),
+        fact(
+            start="2023-01-01",
+            end="2023-03-31",
+            val=100000000,
+            fy=2023,
+            fp="Q1",
+            form="10-Q",
+            filed="2023-05-04",
+        ),
+        fact(
+            start="2023-01-01",
+            end="2023-06-30",
+            val=210000000,
+            fy=2023,
+            fp="Q2",
+            form="10-Q",
+            filed="2023-08-04",
+        ),
+        fact(
+            start="2023-01-01",
+            end="2023-09-30",
+            val=330000000,
+            fy=2023,
+            fp="Q3",
+            form="10-Q",
+            filed="2023-11-03",
+        ),
+        fact(
+            start="2023-01-01",
+            end="2023-12-31",
+            val=460000000,
+            fy=2023,
+            fp="FY",
+            filed="2024-02-20",
+        ),
+        fact(
+            start="2024-01-01",
+            end="2024-03-31",
+            val=118000000,
+            fy=2024,
+            fp="Q1",
+            form="10-Q",
+            filed="2024-05-03",
+        ),
+        fact(
+            start="2024-01-01",
+            end="2024-06-30",
+            val=245000000,
+            fy=2024,
+            fp="Q2",
+            form="10-Q",
+            filed="2024-08-02",
+        ),
+        fact(
+            start="2024-04-01",
+            end="2024-06-30",
+            val=127000000,
+            fy=2024,
+            fp="Q2",
+            form="10-Q",
+            filed="2024-08-02",
+        ),
     ]
     return payload(
         1000047,
@@ -603,7 +673,9 @@ def _tier2() -> dict[str, Any]:
                     {
                         "USD": [
                             fact(start=start, end=end, val=value, fy=fy, filed=filed)
-                            for (start, end, fy, filed), value in zip(years[2:], [4550000000, 4810000000], strict=True)
+                            for (start, end, fy, filed), value in zip(
+                                years[2:], [4550000000, 4810000000], strict=True
+                            )
                         ]
                     }
                 ),
@@ -624,7 +696,9 @@ def _tier2() -> dict[str, Any]:
                     {
                         "USD": [
                             fact(start=start, end=end, val=value, fy=fy, filed=filed)
-                            for (start, end, fy, filed), value in zip(years[2:], [430000000, 452000000], strict=True)
+                            for (start, end, fy, filed), value in zip(
+                                years[2:], [430000000, 452000000], strict=True
+                            )
                         ]
                     }
                 ),
@@ -632,7 +706,9 @@ def _tier2() -> dict[str, Any]:
                     {
                         "USD": [
                             fact(start=start, end=end, val=value, fy=fy, filed=filed)
-                            for (start, end, fy, filed), value in zip(years[2:], [365000000, 388000000], strict=True)
+                            for (start, end, fy, filed), value in zip(
+                                years[2:], [365000000, 388000000], strict=True
+                            )
                         ]
                     }
                 ),
@@ -646,7 +722,9 @@ def _tier2() -> dict[str, Any]:
                     {
                         "USD": [
                             fact(start=start, end=end, val=value, fy=fy, filed=filed)
-                            for (start, end, fy, filed), value in zip(years[2:], [-54000000, -57000000], strict=True)
+                            for (start, end, fy, filed), value in zip(
+                                years[2:], [-54000000, -57000000], strict=True
+                            )
                         ]
                     }
                 ),
@@ -665,7 +743,9 @@ def _tier2() -> dict[str, Any]:
                 "LiabilitiesCurrent": tagged(
                     {"USD": instants([1400000000, 1470000000, 1560000000, 1640000000])}
                 ),
-                "Assets": tagged({"USD": instants([8200000000, 8600000000, 9100000000, 9600000000])}),
+                "Assets": tagged(
+                    {"USD": instants([8200000000, 8600000000, 9100000000, 9600000000])}
+                ),
                 "StockholdersEquity": tagged(
                     {"USD": instants([3300000000, 3600000000, 3950000000, 4300000000])}
                 ),
@@ -729,8 +809,20 @@ def _nci() -> dict[str, Any]:
                 "Revenues": tagged(
                     {
                         "USD": [
-                            fact(start="2023-01-01", end="2023-12-31", val=7400000000, fy=2023, filed="2024-02-21"),
-                            fact(start="2024-01-01", end="2024-12-31", val=7900000000, fy=2024, filed="2025-02-19"),
+                            fact(
+                                start="2023-01-01",
+                                end="2023-12-31",
+                                val=7400000000,
+                                fy=2023,
+                                filed="2024-02-21",
+                            ),
+                            fact(
+                                start="2024-01-01",
+                                end="2024-12-31",
+                                val=7900000000,
+                                fy=2024,
+                                filed="2025-02-19",
+                            ),
                         ]
                     }
                 ),
@@ -800,9 +892,27 @@ def _stubyear() -> dict[str, Any]:
                 "Revenues": tagged(
                     {
                         "USD": [
-                            fact(start="2021-01-01", end="2021-12-31", val=880000000, fy=2021, filed="2022-03-01"),
-                            fact(start="2022-01-01", end="2022-03-01", val=141000000, fy=2022, filed="2022-06-14"),
-                            fact(start="2022-03-02", end="2023-03-07", val=1010000000, fy=2023, filed="2023-06-06"),
+                            fact(
+                                start="2021-01-01",
+                                end="2021-12-31",
+                                val=880000000,
+                                fy=2021,
+                                filed="2022-03-01",
+                            ),
+                            fact(
+                                start="2022-01-01",
+                                end="2022-03-01",
+                                val=141000000,
+                                fy=2022,
+                                filed="2022-06-14",
+                            ),
+                            fact(
+                                start="2022-03-02",
+                                end="2023-03-07",
+                                val=1010000000,
+                                fy=2023,
+                                filed="2023-06-06",
+                            ),
                         ]
                     }
                 ),
@@ -845,20 +955,44 @@ def _badunit() -> dict[str, Any]:
                 "Revenues": tagged(
                     {
                         "USD": [
-                            fact(start="2023-01-01", end="2023-12-31", val=1250000000, fy=2023, filed="2024-02-27")
+                            fact(
+                                start="2023-01-01",
+                                end="2023-12-31",
+                                val=1250000000,
+                                fy=2023,
+                                filed="2024-02-27",
+                            )
                         ],
                         "EUR": [
-                            fact(start="2024-01-01", end="2024-12-31", val=1180000000, fy=2024, filed="2025-02-25")
+                            fact(
+                                start="2024-01-01",
+                                end="2024-12-31",
+                                val=1180000000,
+                                fy=2024,
+                                filed="2025-02-25",
+                            )
                         ],
                     }
                 ),
                 "EarningsPerShareDiluted": tagged(
                     {
                         "USD/shares": [
-                            fact(start="2023-01-01", end="2023-12-31", val=3.42, fy=2023, filed="2024-02-27")
+                            fact(
+                                start="2023-01-01",
+                                end="2023-12-31",
+                                val=3.42,
+                                fy=2023,
+                                filed="2024-02-27",
+                            )
                         ],
                         "USD": [
-                            fact(start="2024-01-01", end="2024-12-31", val=3.71, fy=2024, filed="2025-02-25")
+                            fact(
+                                start="2024-01-01",
+                                end="2024-12-31",
+                                val=3.71,
+                                fy=2024,
+                                filed="2025-02-25",
+                            )
                         ],
                     }
                 ),
@@ -900,12 +1034,31 @@ def _noperiodic() -> dict[str, Any]:
                 "Revenues": tagged(
                     {
                         "USD": [
-                            fact(start="2025-01-01", end="2025-12-31", val=64000000, fy=None, fp=None, form="S-1/A", filed="2026-03-10")
+                            fact(
+                                start="2025-01-01",
+                                end="2025-12-31",
+                                val=64000000,
+                                fy=None,
+                                fp=None,
+                                form="S-1/A",
+                                filed="2026-03-10",
+                            )
                         ]
                     }
                 ),
                 "Assets": tagged(
-                    {"USD": [fact(end="2025-12-31", val=210000000, fy=None, fp=None, form="S-1/A", filed="2026-03-10")]}
+                    {
+                        "USD": [
+                            fact(
+                                end="2025-12-31",
+                                val=210000000,
+                                fy=None,
+                                fp=None,
+                                form="S-1/A",
+                                filed="2026-03-10",
+                            )
+                        ]
+                    }
                 ),
             }
         },
@@ -1143,7 +1296,9 @@ def _arxs_submissions() -> dict[str, Any]:
         "fiscalYearEnd": "1231",
         "stateOfIncorporation": "DE",
         "stateOfIncorporationDescription": "DE",
-        "addresses": {"business": {"street1": "1 Example Way", "city": "Austin", "stateOrCountry": "TX"}},
+        "addresses": {
+            "business": {"street1": "1 Example Way", "city": "Austin", "stateOrCountry": "TX"}
+        },
         "phone": "512-555-0100",
         "flags": "",
         "formerNames": [],
@@ -1276,10 +1431,22 @@ def _aapl_submissions() -> dict[str, Any]:
         "fiscalYearEnd": "0928",
         "stateOfIncorporation": "CA",
         "stateOfIncorporationDescription": "CA",
-        "addresses": {"business": {"street1": "One Apple Park Way", "city": "Cupertino", "stateOrCountry": "CA"}},
+        "addresses": {
+            "business": {
+                "street1": "One Apple Park Way",
+                "city": "Cupertino",
+                "stateOrCountry": "CA",
+            }
+        },
         "phone": "(408) 996-1010",
         "flags": "",
-        "formerNames": [{"name": "APPLE COMPUTER INC", "from": "1994-01-26T00:00:00.000Z", "to": "2007-01-04T00:00:00.000Z"}],
+        "formerNames": [
+            {
+                "name": "APPLE COMPUTER INC",
+                "from": "1994-01-26T00:00:00.000Z",
+                "to": "2007-01-04T00:00:00.000Z",
+            }
+        ],
         "filings": {
             "recent": _columns(rows),
             "files": [
@@ -1371,7 +1538,9 @@ def _noperiodic_submissions() -> dict[str, Any]:
         "exchanges": ["Nasdaq"],
         "fiscalYearEnd": "1231",
         "stateOfIncorporation": "DE",
-        "addresses": {"business": {"street1": "1 Example Way", "city": "Austin", "stateOrCountry": "TX"}},
+        "addresses": {
+            "business": {"street1": "1 Example Way", "city": "Austin", "stateOrCountry": "TX"}
+        },
         "phone": "(512) 555-0100",
         "flags": "",
         "formerNames": [],

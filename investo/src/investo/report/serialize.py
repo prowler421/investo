@@ -63,6 +63,7 @@ __all__ = [
     "RunInfo",
     "run_info",
     "serialize",
+    "intern_sources",
 ]
 
 SCHEMA_VERSION: Final = 1
@@ -260,6 +261,23 @@ def _intern(
 
     ordered = tuple(collected[key] for key in sorted(collected, key=identity))
     return ordered, {_ref_key(ref): position for position, ref in enumerate(ordered)}
+
+
+def intern_sources(history: FinancialHistory) -> tuple[SourceRef, ...]:
+    """The deduplicated, index-ordered ``sources`` array. **[M3]**
+
+    Exported so ``report/model.py`` renders §9.1's tag-provenance appendix from the *same* walk the
+    document uses, rather than collecting distinct refs a second time. This module's docstring
+    already anticipated it: the array *"is also §9.1's appendix, already deduplicated, so M3 renders
+    it directly instead of walking every fact."*
+
+    Two walks would be two definitions of "distinct" — and the table they disagree about is the one
+    whose entire purpose is being checkable against EDGAR. The index a row shows here is therefore
+    the index ``report.json`` refers to, which is what makes the two artifacts cross-referenceable
+    by hand.
+    """
+    ordered, _ = _intern(history)
+    return ordered
 
 
 def _provenance(

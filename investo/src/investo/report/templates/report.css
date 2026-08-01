@@ -1,0 +1,196 @@
+/* Print stylesheet for investo's PDF report (ROADMAP M3).
+ *
+ * Handed to WeasyPrint as a separate CSS object rather than written into a <style> element or
+ * linked from the document. Three reasons, in report/render.py's render_html docstring; the one
+ * that matters is that this file never passes through the template engine, which closes the
+ * CSS-injection context autoescape does not cover — structurally, rather than by a test that
+ * nothing was interpolated.
+ *
+ * Page breaks come from `break-before: page` on each section, never from spacing. Spacing-based
+ * pagination breaks the first time a company has one more finding than the fixture did.
+ *
+ * The palette duplicates report/charts.py's, which names each colour for its role. A hex code
+ * written twice is a hex code that drifts, and test_charts asserts the two agree. */
+
+:root {
+  --ink: #17202a;
+  --ink-muted: #5b6570;
+  --rule: #c9ced4;
+  --series-primary: #1f3a5f;
+  --series-secondary: #c2703d;
+  --series-tertiary: #5b8266;
+  --series-muted: #9aa5b1;
+}
+
+@page {
+  size: A4;
+  margin: 18mm 16mm 16mm 16mm;
+
+  @bottom-left {
+    content: string(running-ticker);
+    font-size: 7pt;
+    color: var(--ink-muted);
+  }
+  @bottom-right {
+    content: counter(page) " / " counter(pages);
+    font-size: 7pt;
+    color: var(--ink-muted);
+  }
+}
+
+/* No footer on the cover. A running header on page one competes with the thing it labels. */
+@page :first {
+  @bottom-left { content: none; }
+  @bottom-right { content: none; }
+}
+
+html {
+  font-family: "DejaVu Sans", "Helvetica Neue", Arial, sans-serif;
+  font-size: 9pt;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+body { margin: 0; }
+
+h1 {
+  font-size: 34pt;
+  letter-spacing: -0.5pt;
+  margin: 0;
+}
+
+h2 {
+  font-size: 13pt;
+  margin: 0 0 8pt 0;
+  padding-bottom: 3pt;
+  border-bottom: 0.6pt solid var(--rule);
+  string-set: running-ticker content();
+}
+
+h3 {
+  font-size: 10pt;
+  margin: 14pt 0 5pt 0;
+  color: var(--series-primary);
+}
+
+code, .mono {
+  font-family: "DejaVu Sans Mono", monospace;
+  font-size: 7.5pt;
+}
+
+/* --- cover ------------------------------------------------------------- */
+.cover { padding-top: 26mm; }
+
+.cover .eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 1.4pt;
+  font-size: 7pt;
+  color: var(--ink-muted);
+  margin: 0 0 18pt 0;
+}
+
+.cover .company { font-size: 15pt; margin: 2pt 0 0 0; }
+.cover .asof { font-size: 9pt; color: var(--ink-muted); margin: 1pt 0 22pt 0; }
+
+.badges { display: flex; gap: 10mm; margin-bottom: 16pt; }
+
+.badge {
+  border: 0.8pt solid var(--rule);
+  padding: 7pt 9pt;
+  width: 74mm;
+}
+
+.badge-label {
+  display: block;
+  text-transform: uppercase;
+  letter-spacing: 1pt;
+  font-size: 6.5pt;
+  color: var(--ink-muted);
+}
+
+.badge-value {
+  display: block;
+  font-size: 15pt;
+  margin: 2pt 0 4pt 0;
+  color: var(--series-primary);
+}
+
+.badge-note { display: block; font-size: 7pt; color: var(--ink-muted); }
+
+.measured { list-style: none; padding: 0; margin: 0 0 24pt 0; font-size: 9.5pt; }
+.measured li { margin-bottom: 2pt; }
+
+.disclaimer {
+  border-top: 0.8pt solid var(--rule);
+  padding-top: 8pt;
+  font-size: 8pt;
+  color: var(--ink);
+}
+
+/* --- body sections ------------------------------------------------------ */
+.page { break-before: page; }
+
+.omission {
+  border-left: 2pt solid var(--series-muted);
+  padding: 4pt 0 4pt 7pt;
+  margin: 7pt 0;
+  font-size: 8pt;
+  color: var(--ink-muted);
+}
+
+.absences { padding-left: 12pt; margin: 4pt 0; font-size: 8.5pt; }
+.absences li { margin-bottom: 2pt; }
+
+.note { color: var(--ink-muted); font-size: 7.5pt; }
+.footnote { color: var(--ink-muted); font-size: 7.5pt; margin: 3pt 0 10pt 0; }
+
+/* --- pairs -------------------------------------------------------------- */
+.pairs { margin: 0 0 10pt 0; }
+.pairs dt {
+  float: left;
+  width: 52mm;
+  color: var(--ink-muted);
+  font-size: 8.5pt;
+}
+.pairs dd { margin: 0 0 2pt 52mm; font-size: 8.5pt; }
+
+/* --- tables ------------------------------------------------------------- */
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 7.5pt;
+  margin-bottom: 4pt;
+}
+
+table.data caption {
+  text-align: left;
+  font-size: 8.5pt;
+  color: var(--series-primary);
+  padding-bottom: 3pt;
+}
+
+table.data th, table.data td {
+  border-bottom: 0.4pt solid var(--rule);
+  padding: 2pt 3pt;
+  vertical-align: top;
+}
+
+table.data thead th {
+  border-bottom: 0.8pt solid var(--ink-muted);
+  font-weight: normal;
+  color: var(--ink-muted);
+}
+
+table.data th.rowlabel { text-align: left; font-weight: normal; width: 34mm; }
+table.data td.num, table.data th.num { text-align: right; font-variant-numeric: tabular-nums; }
+table.data .note { color: var(--ink-muted); font-size: 6.5pt; word-break: break-all; }
+
+/* Repeat the header when a table splits across pages, and never orphan a caption. */
+table.data thead { display: table-header-group; }
+table.data caption { break-after: avoid; }
+table.data tr { break-inside: avoid; }
+
+/* --- charts ------------------------------------------------------------- */
+figure.chart { margin: 0 0 9pt 0; break-inside: avoid; }
+figure.chart img { width: 100%; }
+figure.chart figcaption { font-size: 7pt; color: var(--ink-muted); margin-top: 1pt; }

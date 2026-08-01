@@ -22,6 +22,16 @@ floor below 1.4 inherits a hard ``curl_cffi`` requirement; no ceiling invites a 
 library whose upstream has no contract.
 """
 
+# pyright: reportMissingImports=false, reportAttributeAccessIssue=false
+#
+# `yfinance` is an optional extra (see `pyproject.toml`), so on a default install the import does not
+# resolve at all — which is the *designed* behaviour: the adapter ships, the dependency does not, and
+# the import is lazy with a `ConfigError` naming the extra. A type checker cannot distinguish that
+# from a missing dependency, and CI installs without the extra on purpose.
+#
+# `reportAttributeAccessIssue` for the same root cause one step later: with no stubs, a pandas frame
+# read out of `yf.download` is `object`, so `.date` on a value taken from it cannot be resolved.
+
 from __future__ import annotations
 
 import math

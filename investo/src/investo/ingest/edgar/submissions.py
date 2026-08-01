@@ -77,7 +77,7 @@ ITEM_CODE: Final = re.compile(r"^\d\.\d\d$")
 
 The codes themselves are stable and documented (SEC's Webmaster FAQ enumerates them for filings
 since 2004): 1.01-1.05, 2.01-2.06, 3.01-3.03, 4.01, 4.02, 5.01-5.08, 6.01-6.10, 7.01, 8.01, 9.01.
-Mapping a code to a *severity* is M4.5's ``analyze/events.py``, not this parser's.
+Mapping a code to a *severity* is M4.5's ``analysis/events.py``, not this parser's.
 """
 
 _REQUIRED_COLUMNS: Final = ("accessionNumber", "filingDate", "form", "primaryDocument")
@@ -254,7 +254,9 @@ def parse_files(value: object) -> tuple[FilesEntry, ...]:
     if value is None:
         return ()
     if not isinstance(value, list):
-        raise UpstreamFetchError(f"submissions: `filings.files` must be a list, got {type(value).__name__}.")
+        raise UpstreamFetchError(
+            f"submissions: `filings.files` must be a list, got {type(value).__name__}."
+        )
     entries: list[FilesEntry] = []
     for position, item in enumerate(value):
         if not isinstance(item, dict):

@@ -6,14 +6,18 @@ Give it a ticker; it pulls the company's audited financials and 10-K/10-Q text f
 runs a deterministic financial model, scans for accounting and governance red flags,
 compares against sector peers, and emits a PDF.
 
-> **Status: ingest and normalization built.** `investo fetch`, `investo facts` and
-> `investo cache prune` work — EDGAR and price payloads are fetched through a rate-limited choke
-> point, cached immutably, parsed into typed rows, and normalized into per-metric annual and
-> quarterly series where every figure names the XBRL tag and accession behind it. `investo facts
-> TICKER --json` emits the full `report.json`. `analyze` and `backtest` parse their flag surface
-> and report the milestone that implements them. See [DESIGN.md](DESIGN.md) for the architecture,
-> [ROADMAP.md](ROADMAP.md) for the build plan and open questions, and [`docs/`](docs/) for the
-> per-milestone designs.
+> **Status: ingest, normalization and the report shell built.** `investo fetch`, `investo facts`,
+> `investo analyze` and `investo cache prune` work — EDGAR and price payloads are fetched through a
+> rate-limited choke point, cached immutably, parsed into typed rows, normalized into per-metric
+> annual and quarterly series where every figure names the XBRL tag and accession behind it, and
+> rendered to a PDF alongside `report.json`.
+>
+> **The PDF is historical only.** There is no forecast, no quality score, no peer comparison, no
+> 8-K event detection and no narrative analysis yet — the cover's verdict badge reads
+> `NOT ASSESSED` and the caveats section lists each absence and the milestone that fills it.
+> `backtest` parses its flag surface and reports the milestone that implements it. See
+> [DESIGN.md](DESIGN.md) for the architecture, [ROADMAP.md](ROADMAP.md) for the build plan and open
+> questions, and [`docs/`](docs/) for the per-milestone designs.
 
 ---
 
@@ -75,20 +79,26 @@ what a human skims past, and forcing every assumption to be named and adjustable
 
 ## Quickstart
 
-*(`fetch` and `cache prune` work as of M1, `facts` as of M2. `analyze` arrives with M3 — it parses
-its full flag surface today and reports the milestone that implements it.)*
+*(`fetch` and `cache prune` work as of M1, `facts` as of M2, `analyze` as of M3 — historical
+sections only. `backtest` parses its full flag surface today and reports the milestone that
+implements it.)*
 
 ```bash
+# WeasyPrint renders the PDF through Pango and cairo, which come from the platform rather than
+# from PyPI. This is the one dependency `uv sync` cannot satisfy on its own.
+sudo apt-get install libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b   # Debian/Ubuntu
+brew install pango                                                    # macOS
+
 uv sync
 uv sync --extra yfinance               # optional: the yfinance price adapter
 
 # SEC requires a declared User-Agent. No default is provided; startup fails without it.
 export INVESTO_SEC_USER_AGENT="Investo research your.email@example.com"
 export INVESTO_TIINGO_KEY="..."        # price data — required by the default provider
-export INVESTO_ANTHROPIC_KEY="..."     # optional: narrative analysis
+export INVESTO_ANTHROPIC_KEY="..."     # optional: narrative analysis, from M6
 
-investo fetch NVDA                     # works now: fills the cache, prints a summary
-investo analyze NVDA --llm anthropic   # --llm defaults to none
+investo fetch NVDA                     # fills the cache, prints a summary
+investo analyze NVDA                   # writes reports/NVDA/<as-of>/report.{pdf,json}
 ```
 
 `INVESTO_TIINGO_KEY` is not optional for a default run: `price_provider` defaults to `tiingo`, and a
@@ -135,7 +145,14 @@ revenue-tagging boundary for every filer, which requires stitching two different
 into one series — it's the highest-risk setting, and the report flags when it's been done.
 
 Every run also writes `report.json` next to the PDF: all normalized financials, computed
-metrics, flags, scores, and the exact config and prompt versions used.
+metrics, flags, scores, and the exact config and prompt versions used. Both land in
+`<out>/TICKER/<as-of>/`, so a second ticker does not overwrite the first and re-running one
+point-in-time reconstruction overwrites itself rather than accumulating.
+
+Two flags do less than they will. `--llm` is **exit 5** for anything but `none` until the narrative
+layer lands (M6) — a report that silently drops the section you asked for is worse than one that
+refuses — and `--explain` is recorded in the run block but has no intermediate calculations to dump
+until the forecast engine lands (M5).
 
 ---
 

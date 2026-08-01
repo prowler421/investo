@@ -2,6 +2,26 @@
 # Install once with `uv run pre-commit install` (or `make install`).
 # Ruff and BasedPyright run through the local uv environment so versions match uv.lock.
 # Hooks mirror a subset of `make check`: lint, format, typecheck — not pytest.
+#
+# **The Python project is not at the git root.** The repository root is one level above this
+# directory, and pre-commit always runs hooks from the git root — so a hook that says `src tests`
+# resolves those against the wrong directory. The symptoms were misleading in three ways, which is
+# why it went unnoticed until M3:
+#
+#   - `ruff check --fix src tests` failed with `E902 No such file or directory` on `src` and
+#     `tests`, which reads as a broken checkout rather than as a wrong cwd.
+#   - `ruff format` *passed*, because its entry named no paths and pre-commit handed it real
+#     git-root-relative filenames. One hook getting filenames while its neighbour gets literal
+#     paths is exactly the asymmetry that hides this.
+#   - `basedpyright` ran, found no `pyproject.toml`, and silently fell back to its default mode
+#     instead of `strict` — reporting 51 errors and 760 warnings from rules this project
+#     deliberately disables. A type checker under the wrong config does not announce it; it just
+#     disagrees with `make typecheck`, and the disagreement reads as "the code got worse".
+#
+# So each local hook cds to the directory holding `pyproject.toml` before running, and passes no
+# filenames. The guard works whether the project sits at the git root or one level below it, and
+# the result is that these hooks run *exactly* what the Makefile runs — which is what the line
+# above has claimed since M0 and has not been true since.
 minimum_pre_commit_version: "4.0.0"
 
 repos:
@@ -24,21 +44,28 @@ repos:
 
   - repo: local
     hooks:
+      # `pass_filenames: false` on all three, deliberately. Each names the paths it checks — the
+      # same ones `make check` names — and mixing those with pre-commit's filename list is what
+      # produced the asymmetry described above. The cost is that a commit touching one file
+      # re-checks the tree; at this size that is seconds, and it buys hooks that cannot disagree
+      # with CI.
       - id: lint
         name: lint (ruff check)
-        entry: uv run ruff check --fix src tests
+        entry: bash -euc 'test -f pyproject.toml || cd investo; exec uv run ruff check --fix src tests'
         language: system
         types: [python]
+        pass_filenames: false
         require_serial: true
       - id: ruff-format
         name: ruff (format)
-        entry: uv run ruff format
+        entry: bash -euc 'test -f pyproject.toml || cd investo; exec uv run ruff format src tests'
         language: system
         types: [python]
+        pass_filenames: false
         require_serial: true
       - id: basedpyright
         name: basedpyright (typecheck)
-        entry: uv run basedpyright
+        entry: bash -euc 'test -f pyproject.toml || cd investo; exec uv run basedpyright'
         language: system
         types: [python]
         pass_filenames: false

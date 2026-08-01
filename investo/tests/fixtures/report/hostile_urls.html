@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<!--
+  Hand-written, and that is the point.
+
+  No investo template can produce any of these — charts embed as data: URIs and the stylesheet is a
+  separate CSS object — which is exactly why the url_fetcher would otherwise be tested only against
+  inputs that never reach it. A deny that has never been asked to deny anything is not a tested
+  deny.
+
+  One URL per file is deliberate too: the fetcher raises on the first one, so a single document
+  carrying all four would only ever exercise whichever WeasyPrint resolved first. test_render.py
+  templates this file with one placeholder substituted per case.
+-->
+<html lang="en">
+<head><meta charset="utf-8"><title>hostile</title></head>
+<body>
+  <p>A document with exactly one external reference.</p>
+  <img src="__URL__" alt="the refused resource">
+</body>
+</html>

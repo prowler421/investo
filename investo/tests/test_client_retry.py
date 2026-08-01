@@ -431,7 +431,7 @@ def test_a_request_to_another_host_raises_before_any_traffic(
     """
     client = _client(cache, respx.Router(), clock)
 
-    with pytest.raises(UpstreamFetchError, match="sec.gov"):
+    with pytest.raises(UpstreamFetchError, match=r"sec\.gov"):
         _ = client.get("https://api.finra.org/data/group/otcMarket/name/weeklySummary")
 
     assert client.request_count == 0

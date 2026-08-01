@@ -98,6 +98,71 @@ def test_every_declared_dependency_is_importable() -> None:
         importlib.import_module(module_for.get(name, name))
 
 
+@pytest.mark.spec
+def test_precommit_hooks_run_where_pyproject_is() -> None:
+    """The bug this file exists to prevent, in the one place nobody was reading. **[M3]**
+
+    `.pre-commit-config.yaml` has claimed since M0 that its hooks *"mirror a subset of `make
+    check`"*. They did not, and could not: **the git root is one level above this project**, and
+    pre-commit runs hooks from the git root — so `ruff check src tests` resolved `src` and `tests`
+    against a directory that has neither, and `basedpyright` found no `pyproject.toml` and silently
+    ran in its default mode rather than `strict`.
+
+    The second half is what makes this worth a test rather than a fix. A linter given a bad path
+    fails loudly. **A type checker given no config does not** — it runs, reports hundreds of
+    diagnostics from rules this project disables on purpose, and the output reads as though the code
+    regressed. Nothing distinguishes it from a real failure except knowing the config was not read.
+
+    So the assertion is on the property that was violated, not on the exact command: a hook that
+    names a relative path has to establish its own working directory first.
+    """
+    import yaml
+
+    config = yaml.safe_load((ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8"))
+    local = [repo for repo in config["repos"] if repo["repo"] == "local"]
+    assert local, "the local hook block is gone; this test now asserts nothing"
+
+    hooks = local[0]["hooks"]
+    assert {hook["id"] for hook in hooks} == {"lint", "ruff-format", "basedpyright"}
+
+    for hook in hooks:
+        entry = str(hook["entry"])
+        assert "pyproject.toml" in entry, (
+            f"hook {hook['id']!r} does not establish its working directory; pre-commit runs from "
+            "the git root, which is not this project's directory"
+        )
+        # Filenames are git-root-relative, so appending them after the guard cds would mix two
+        # different bases. Every hook names its own paths instead.
+        assert hook.get("pass_filenames") is False, f"hook {hook['id']!r} still takes filenames"
+
+
+@pytest.mark.spec
+def test_precommit_runs_the_same_tools_as_make_check() -> None:
+    """The claim in the config's own header, asserted rather than trusted.
+
+    Deliberately compares the **tools**, not the flag strings: `make check` runs
+    `ruff format --check` and the hook runs `ruff format`, because CI verifies formatting and a
+    commit hook fixes it. That difference is intended. A hook running a tool CI does not, or missing
+    one CI has, is not.
+    """
+    import yaml
+
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+    check_targets = ("ruff check", "ruff format", "basedpyright")
+    for tool in check_targets:
+        assert f"uv run {tool}" in makefile, f"the Makefile no longer runs {tool}"
+
+    config = yaml.safe_load((ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8"))
+    entries = " ".join(
+        str(hook["entry"])
+        for repo in config["repos"]
+        if repo["repo"] == "local"
+        for hook in repo["hooks"]
+    )
+    for tool in check_targets:
+        assert f"uv run {tool}" in entries, f"pre-commit no longer runs {tool}"
+
+
 def test_roadmap_records_the_m0_deviations() -> None:
     """Deviations from DESIGN.md are logged, per CLAUDE.md § Documentation requirements.
 
