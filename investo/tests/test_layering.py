@@ -20,6 +20,7 @@ and that is what makes it documentation by construction.
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 from typing import Final
 
@@ -91,7 +92,7 @@ USGAAP_LITERAL_ALLOWED: Final = {
 """M2 widens M1's ``ingest/`` rule to the **whole package**, with a one-key allowlist.
 
 M1 argued it for ``ingest/`` on the grounds that a tag literal there *"is the first line of a second,
-shadow copy of ``normalize/tags.py``."* The argument is stronger for ``report/`` and ``analyze/``,
+shadow copy of ``normalize/tags.py``."* The argument is stronger for ``report/`` and ``analysis/``,
 because those have a plausible reason to want one — a chart label, a hardcoded fallback for a metric
 that came back empty — and the disagreement it produces is between the number and its own provenance
 line.
@@ -104,6 +105,7 @@ COMMAND_CLOCK_READ_ALLOWED: Final = {
     "cli.py": "`--as-of` is rejected as future against today, and `cache prune` needs a now",
     "fetch.py": "`run_fetch` defaults `as_of` to today when the caller passed none",
     "facts.py": "`run_facts` does the same, once, before threading the result down",
+    "analyze.py": "`run_analyze` does the same, and derives SOURCE_DATE_EPOCH from the result",
 }
 """Modules **outside** ``ingest/`` that may read a clock, and why. Pinned, because the list grows.
 
@@ -121,13 +123,39 @@ under ``normalize/`` or ``report/`` may read one at all —
 _CLOCK_ATTRS: Final = frozenset({"now", "today", "utcnow"})
 _CLOCK_OWNERS: Final = frozenset({"datetime", "date"})
 _DOMAIN_FORBIDDEN: Final = {"httpx", "urllib", "socket", "requests", "sqlite3", "pathlib"}
-_NORMALIZE_FORBIDDEN: Final = _DOMAIN_FORBIDDEN - {"pathlib"}
+_NORMALIZE_FORBIDDEN: Final = (_DOMAIN_FORBIDDEN - {"pathlib"}) | {"numpy"}
 """``docs/m2/05-testing.md`` §4 lists five imports, not ``domain/``'s six.
 
 ``pathlib`` is deliberately absent: nothing under ``normalize/`` or ``report/`` writes a file today —
-``serialize`` returns a string and the command owns the path — but M3's renderer will legitimately need
-to read a template from disk, and a rule that has to be relaxed in the milestone after the one that
-added it was never the rule.
+``serialize`` returns a string and the command owns the path — but M3's renderer legitimately reads a
+template from disk, and a rule that has to be relaxed in the milestone after the one that added it was
+never the rule. (M3 did need it, for ``report/render.py``'s ``templates_dir``.)
+
+``numpy`` is added in M3 (``docs/m3/README.md`` § 7 question 14). It arrives transitively with
+matplotlib, two milestones before ROADMAP declares it, and it is the ``float`` ban's back door: a
+``numpy.float64`` is constructed by no ``float()`` call and contains no float literal, so it passes
+both detectors below. An array of them is the natural thing to reach for when a chart needs a series.
+"""
+
+FLOAT_ALLOWED: Final = {
+    "report/charts.py": "matplotlib plots coordinates; every conversion is inside `coord`",
+}
+"""The one module permitted a ``float`` (M3). CLAUDE.md convention 13.
+
+Same shape as :data:`USGAAP_LITERAL_ALLOWED` and for the same reason: one key, asserted, so a second
+is a visible edit. And the allowlist alone would be an *exemption* rather than a boundary, which is
+what :func:`test_every_float_call_is_inside_coord` exists to prevent — the float positions a mark,
+and every visible number is formatted from the ``Decimal`` by ``report/format.py``.
+"""
+
+COORD: Final = "coord"
+TEMPLATE_DIR: Final = "report/templates"
+FORBIDDEN_TEMPLATE_NODES: Final = ("Add", "Sub", "Mul", "Div", "FloorDiv", "Mod", "Pow")
+"""Jinja AST node types that mean a figure was computed in a template.
+
+Not Python's AST — Jinja exposes its own, and that is what makes this rule as cheap as the ones
+above. A number computed in a template has no ``Fact`` behind it, is absent from ``report.json``, and
+is invisible to every test that walks the model.
 """
 
 
@@ -533,6 +561,12 @@ def test_m2_trees_exist_to_be_checked() -> None:
         "normalize/facts.py",
         "normalize/statements.py",
         "report/serialize.py",
+        # M3. Added here rather than in a second guard, because the five rules over these trees are
+        # the same five and a separate discovery test would be a second thing to keep in step.
+        "report/format.py",
+        "report/model.py",
+        "report/charts.py",
+        "report/render.py",
     ):
         assert expected in names, f"{expected} not found among {sorted(names)}"
 
@@ -618,7 +652,7 @@ def test_every_clock_reading_module_is_a_command_body() -> None:
     above pass is to add the offending module, and that repair should be a visible edit to a set that
     says why each member is in it.
     """
-    assert set(COMMAND_CLOCK_READ_ALLOWED) == {"cli.py", "fetch.py", "facts.py"}
+    assert set(COMMAND_CLOCK_READ_ALLOWED) == {"cli.py", "fetch.py", "facts.py", "analyze.py"}
     names = {rel for rel, _ in MODULES}
     for rel in COMMAND_CLOCK_READ_ALLOWED:
         assert rel in names, f"{rel} no longer exists"
@@ -648,7 +682,16 @@ def test_normalize_does_not_import_downstream_layers() -> None:
         upward = {
             name
             for name in imported
-            if name.startswith(("investo.report", "investo.analyze", "investo.backtest"))
+            if name.startswith(
+                (
+                    "investo.report",
+                    # Both spellings: `analyze.py` is M3's command body and `analysis/` is M4's
+                    # package. An upward import of either is the same layering failure.
+                    "investo.analyze",
+                    "investo.analysis",
+                    "investo.backtest",
+                )
+            )
         }
         assert not upward, f"{rel} imports {sorted(upward)}"
 
@@ -677,10 +720,211 @@ def test_no_float_in_normalize_or_report() -> None:
     A fill rate looks like a ``float`` and ``json.dumps`` accepts one. The AST check covers the
     ``float(value)`` route; ``test_serialize::test_values_are_quoted_in_the_raw_text`` covers the other
     one, a ``JSONEncoder`` that passes a ``Decimal`` through unquoted.
+
+    **One exemption from M3**, in :data:`FLOAT_ALLOWED`: matplotlib cannot plot a ``Decimal``. It is
+    a boundary rather than a hole — the two tests below constrain what the exempt module may do with
+    the permission, which is the half that carries the guarantee.
     """
     for rel, tree in _m2_modules():
+        if rel in FLOAT_ALLOWED:
+            continue
         offenders = _float_constructions(tree)
         assert not offenders, f"{rel} constructs a float: {offenders}"
+
+
+@pytest.mark.spec
+def test_the_float_allowlist_holds_only_the_chart_module() -> None:
+    """One key, pinned. A second entry is where the ``Decimal`` discipline starts unravelling."""
+    assert set(FLOAT_ALLOWED) == {"report/charts.py"}
+
+
+@pytest.mark.spec
+def test_every_float_call_is_inside_coord() -> None:
+    """CLAUDE.md convention 13: the conversion happens in **one function**, not one module.
+
+    An allowlisted module is an exemption; a single named call site is a boundary. Without this, a
+    ``float(fact.value)`` in a comprehension three functions away is legal, and the argument that
+    makes the exemption safe — *the float positions a mark and never produces a printed figure* —
+    stops being checkable by reading one function.
+
+    The converse is asserted in the same test: ``coord`` must contain a conversion, or the rule is
+    passing because the function was renamed and every other call site is now unguarded.
+    """
+    trees = dict(MODULES)
+    for rel in FLOAT_ALLOWED:
+        inside = 0
+        for node in ast.walk(trees[rel]):
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            calls = [
+                child
+                for child in ast.walk(node)
+                if isinstance(child, ast.Call)
+                and isinstance(child.func, ast.Name)
+                and child.func.id == "float"
+            ]
+            if node.name == COORD:
+                inside += len(calls)
+            else:
+                assert not calls, f"{rel}: float() in {node.name}(), not in {COORD}()"
+        assert inside >= 1, f"{rel}: {COORD}() no longer converts anything"
+
+    module_level = [
+        node
+        for node in trees[next(iter(FLOAT_ALLOWED))].body
+        if isinstance(node, ast.Expr | ast.Assign | ast.AnnAssign)
+        and any(
+            isinstance(child, ast.Call)
+            and isinstance(child.func, ast.Name)
+            and child.func.id == "float"
+            for child in ast.walk(node)
+        )
+    ]
+    assert not module_level, "a float() at module scope is outside every function, including coord"
+
+
+@pytest.mark.spec
+def test_every_float_literal_is_a_named_module_constant() -> None:
+    """The other half of convention 13: no ``alpha=0.35`` inline in a plotting call.
+
+    Geometry constants are unavoidable — a figure size and a bar width are floats — so the rule is
+    about *where* they live. Hoisted and named, the exempt module's entire float surface is a
+    reviewable block at the top; scattered through plotting calls, it is a file nobody can audit by
+    reading its first screen.
+    """
+    trees = dict(MODULES)
+    for rel in FLOAT_ALLOWED:
+        hoisted = {
+            id(child)
+            for node in trees[rel].body
+            if isinstance(node, ast.Assign | ast.AnnAssign) and _is_constant_target(node)
+            for child in ast.walk(node)
+            if isinstance(child, ast.Constant) and isinstance(child.value, float)
+        }
+        stray = [
+            f"{node.value!r} at line {node.lineno}"
+            for node in ast.walk(trees[rel])
+            if isinstance(node, ast.Constant)
+            and isinstance(node.value, float)
+            and id(node) not in hoisted
+        ]
+        assert not stray, f"{rel} has unhoisted float literals: {stray}"
+
+
+def _is_constant_target(node: ast.Assign | ast.AnnAssign) -> bool:
+    """``NAME = ...`` at module scope, uppercase — the shape a declared constant has."""
+    targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+    return all(isinstance(item, ast.Name) and item.id.isupper() for item in targets)
+
+
+# ---------------------------------------------------------------------------
+# The M3 seam — templates
+# ---------------------------------------------------------------------------
+_JINJA_COMMENT: Final = re.compile(r"\{#.*?#\}", re.DOTALL)
+"""``{# ... #}``. Stripped before the text rules below, for the reason this file already excludes
+Python docstrings from the literal walk: **every template documents the rule it obeys**, so prose is
+where a forbidden token is most likely to appear legitimately. ``report.html.j2``'s header says "no
+``|safe``", and a check that failed on that sentence would be repaired by deleting the sentence.
+
+A Jinja comment never reaches the parsed node tree either, so the arithmetic rule gets this for
+free — this only matters for the two rules that read raw text."""
+
+
+def _templates() -> tuple[tuple[str, str], ...]:
+    directory = PACKAGE_ROOT / TEMPLATE_DIR
+    return tuple(
+        (path.name, _JINJA_COMMENT.sub("", path.read_text(encoding="utf-8")))
+        for path in sorted(directory.glob("*.j2"))
+    )
+
+
+def test_jinja_comments_are_stripped_before_the_text_rules() -> None:
+    """The exclusion is load-bearing, so it gets its own test — same as its Python counterpart.
+
+    Without it the ``|safe`` rule fails on the template that explains the ``|safe`` rule, and the
+    likely repair is deleting the explanation rather than the token.
+    """
+    assert _JINJA_COMMENT.sub("", "{# no |safe here #}x{{ y }}") == "x{{ y }}"
+
+
+@pytest.mark.spec
+def test_templates_exist_to_be_checked() -> None:
+    """Guard the two rules below: each iterates a directory, and an empty one passes vacuously.
+
+    The same argument as ``test_m2_trees_exist_to_be_checked``, one layer up. It also catches the
+    packaging failure the ``src/`` layout exists to prevent — if the templates are not in the
+    installed package, ``PACKAGE_ROOT`` will not find them and this fails rather than the renderer
+    failing at run time for a user.
+    """
+    names = {name for name, _ in _templates()}
+    assert {"report.html.j2", "brief.html.j2", "_macros.html.j2"} <= names, sorted(names)
+    assert (PACKAGE_ROOT / TEMPLATE_DIR / "report.css").is_file(), "the stylesheet is not packaged"
+
+
+@pytest.mark.spec
+def test_no_arithmetic_in_templates() -> None:
+    """CLAUDE.md convention 14. A figure computed in a template has no ``Fact`` behind it.
+
+    It is also absent from ``report.json`` and invisible to every test that walks the model, which
+    is what makes it worth an AST rule rather than a review habit — and it is the most natural thing
+    to write when the template is two lines from the data it needs.
+
+    Jinja's own parser, not Python's. ``report/model.py`` already hands the template strings, so this
+    is a second lock on a door that is shut; the door is shut by a convention about what goes in a
+    dataclass, and this is what fails the build when that convention slips.
+    """
+    from jinja2 import Environment, nodes
+
+    env = Environment(autoescape=True)
+    forbidden = tuple(getattr(nodes, name) for name in FORBIDDEN_TEMPLATE_NODES)
+    for name, source in _templates():
+        tree = env.parse(source)
+        offenders = [type(node).__name__ for node in tree.find_all(forbidden)]
+        assert not offenders, f"{name} computes a figure: {offenders}"
+
+
+@pytest.mark.spec
+def test_the_template_arithmetic_detector_detects() -> None:
+    """Guard the detector against its own false negatives.
+
+    The same treatment ``test_the_sort_and_float_detectors_actually_detect`` gives the others: a
+    snippet that must trip it, parsed from source so the test names its own input.
+    """
+    from jinja2 import Environment, nodes
+
+    env = Environment(autoescape=True)
+    forbidden = tuple(getattr(nodes, name) for name in FORBIDDEN_TEMPLATE_NODES)
+    tripped = env.parse("{{ revenue / shares }}")
+    assert list(tripped.find_all(forbidden)), "the detector missed a division"
+    clean = env.parse("{{ model.cover.ticker }}{% for row in rows %}{{ row.label }}{% endfor %}")
+    assert not list(clean.find_all(forbidden))
+
+
+@pytest.mark.spec
+def test_no_template_disables_autoescape() -> None:
+    """``|safe`` is the one filter this project will not have in a template.
+
+    Autoescape is unconditional and nothing in an M3 report needs to carry markup. The rule is
+    cheaper to establish now than to retrofit at M6, against a template that renders filing text and
+    already has one.
+    """
+    for name, source in _templates():
+        assert "|safe" not in source.replace(" ", ""), f"{name} uses |safe"
+        assert "autoescape false" not in source, f"{name} turns autoescape off"
+
+
+@pytest.mark.spec
+def test_the_stylesheet_is_never_templated() -> None:
+    """The CSS does not pass through Jinja, which closes a context autoescape does not cover.
+
+    ``<style>`` is an HTML raw-text element — entity references are not parsed inside it — so an
+    escaped stylesheet would be a *broken* stylesheet, and the usual repair is ``|safe``, which
+    reopens the injection. WeasyPrint takes the CSS as a separate object instead, so no template
+    references it at all and there is nothing to get wrong.
+    """
+    for name, source in _templates():
+        assert "<style" not in source, f"{name} inlines a stylesheet"
+        assert "stylesheet" not in source, f"{name} references the stylesheet"
 
 
 @pytest.mark.spec

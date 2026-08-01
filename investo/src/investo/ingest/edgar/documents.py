@@ -98,7 +98,11 @@ def normalize_text(text: str) -> str:
     twice would not match, and §7.3's verifier would reject a true citation.
     """
     cleaned = (
-        text.replace(" ", " ")
+        # The first literal below is a real U+00A0, because this is the call that strips it.
+        # RUF001 stays on for that character everywhere else — it is invisible, so one arriving by
+        # paste is a bug nobody can see, and allowlisting it repo-wide to permit the one line that
+        # removes it would switch off the only detector for the case that matters (pyproject.toml).
+        text.replace(" ", " ")  # noqa: RUF001
         .replace("&nbsp;", " ")
         .replace("&#160;", " ")
         .replace("&amp;", "&")

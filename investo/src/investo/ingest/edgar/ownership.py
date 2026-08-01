@@ -20,7 +20,7 @@ rows for the structured era and reports the pre-boundary filings as
 Positions may be fully unwound before publication. Parsed, and the lag is printed wherever the
 number is.
 
-The P/S filtering rule lives here rather than in ``analyze/`` because it is a property of the
+The P/S filtering rule lives here rather than in ``analysis/`` because it is a property of the
 *source format* — which transaction codes mean an open-market trade — not an analysis. The judgment
 about what a cluster of sales *means* is M4.5's.
 """

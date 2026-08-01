@@ -24,6 +24,7 @@ from __future__ import annotations
 import os
 import re
 from contextvars import ContextVar
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, Literal
 
@@ -171,6 +172,23 @@ class Settings(BaseSettings):
     # penalty for being slightly too fast is minutes of downtime, and the reward for being
     # exactly at the limit is nothing.
     edgar_requests_per_second: float = Field(default=5.0, gt=0, le=10)
+
+    coverage_floor: Decimal | None = Field(default=None, ge=0, le=1)
+    """Tier-1 annual fill rate below which ``analyze`` exits 3. **Unset by default.** [M3]
+
+    DESIGN.md §4.2 sanctions *a configurable floor* — coverage *"below a configurable floor degrades
+    the report's confidence rating and can trigger an 'insufficient data' verdict"* — and supplies no
+    number. `docs/m2/COVERAGE.md` is the measurement that would, and it does not exist yet.
+
+    Defaulting to ``None`` rather than to a plausible-looking figure is the same call
+    ``pyproject.toml``'s unset ``fail_under`` makes, for the same reason: a threshold invented before
+    the measurement fires arbitrarily, and the first person it annoys tunes it rather than
+    investigating. Resolve it the way that comment specifies — measure, set, and put the measured
+    figure in the commit message.
+
+    ``Decimal``, not ``float``, because it is compared against ``MetricCoverage.fill_rate``, and a
+    mixed comparison is where a rate of exactly the floor stops being reproducible.
+    """
 
     @field_validator("sec_user_agent")
     @classmethod

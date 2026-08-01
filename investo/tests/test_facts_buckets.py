@@ -173,9 +173,7 @@ def test_ytd_is_differenced_into_the_quarters_the_filer_never_reported() -> None
     q1_end, h1_end, nine_month_end = sorted(ladder)
     series = _series(YTDONLY)
     recovered = {
-        fact.period.end: fact
-        for fact in series.quarterly.facts
-        if _rule(fact.source) == YTD_RULE
+        fact.period.end: fact for fact in series.quarterly.facts if _rule(fact.source) == YTD_RULE
     }
 
     assert set(recovered) == {h1_end, nine_month_end}
@@ -204,9 +202,7 @@ def test_a_redundant_ytd_fact_is_dropped_and_counted() -> None:
     raw = _raw(YTDONLY)
     filed_ends = {fact.period.end for fact in raw if fact.period.kind is PeriodKind.QUARTER}
     redundant = [
-        fact
-        for fact in raw
-        if fact.period.kind is PeriodKind.YTD and fact.period.end in filed_ends
+        fact for fact in raw if fact.period.kind is PeriodKind.YTD and fact.period.end in filed_ends
     ]
     assert len(redundant) == 1, "the fixture carries exactly one redundant cumulative fact"
 

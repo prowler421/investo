@@ -154,8 +154,18 @@ def run_fetch(
         row, all_rows = _resolve_ticker(client, result)
         _fetch_submissions(client, result, cik=row.cik, window=(start, end))
         _fetch_companyfacts(client, result, cik=row.cik)
-        _fetch_prices(client, result, settings=settings, cache=cache, refresh=refresh,
-                      ticker=row.ticker, start=start, end=end, as_of=today, all_rows=all_rows)
+        _fetch_prices(
+            client,
+            result,
+            settings=settings,
+            cache=cache,
+            refresh=refresh,
+            ticker=row.ticker,
+            start=start,
+            end=end,
+            as_of=today,
+            all_rows=all_rows,
+        )
 
         result.requests = client.request_count
         result.elapsed_seconds = datetime.now().timestamp() - started

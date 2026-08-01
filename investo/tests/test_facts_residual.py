@@ -94,9 +94,7 @@ def _fact(
     """
     donor = company_facts(AAPL).get(GAAP, "SalesRevenueNet")[0]
     source = (
-        donor.source
-        if rule is None
-        else Derivation(rule=rule, inputs=(donor.source, donor.source))
+        donor.source if rule is None else Derivation(rule=rule, inputs=(donor.source, donor.source))
     )
     return Fact(
         metric=metric,
@@ -325,9 +323,15 @@ def test_eps_q4_is_not_derived() -> None:
     """
     year = _fact(Metric.EPS_DILUTED, *FY2022, "4.00", unit="USD/shares")
     quarters = [
-        _quarter(Metric.EPS_DILUTED, date(2022, 1, 1), date(2022, 3, 31), "0.90", unit="USD/shares"),
-        _quarter(Metric.EPS_DILUTED, date(2022, 4, 1), date(2022, 6, 30), "0.95", unit="USD/shares"),
-        _quarter(Metric.EPS_DILUTED, date(2022, 7, 1), date(2022, 9, 30), "1.00", unit="USD/shares"),
+        _quarter(
+            Metric.EPS_DILUTED, date(2022, 1, 1), date(2022, 3, 31), "0.90", unit="USD/shares"
+        ),
+        _quarter(
+            Metric.EPS_DILUTED, date(2022, 4, 1), date(2022, 6, 30), "0.95", unit="USD/shares"
+        ),
+        _quarter(
+            Metric.EPS_DILUTED, date(2022, 7, 1), date(2022, 9, 30), "1.00", unit="USD/shares"
+        ),
     ]
     assert derive_q4(year, quarters) is None
     assert residual(year, quarters, rule=Q4_RULE) is None
@@ -344,13 +348,25 @@ def test_diluted_shares_q4_is_not_derived() -> None:
     year = _fact(Metric.SHARES_DILUTED_WEIGHTED, *FY2022, "1000", unit="shares")
     quarters = [
         _quarter(
-            Metric.SHARES_DILUTED_WEIGHTED, date(2022, 1, 1), date(2022, 3, 31), "990", unit="shares"
+            Metric.SHARES_DILUTED_WEIGHTED,
+            date(2022, 1, 1),
+            date(2022, 3, 31),
+            "990",
+            unit="shares",
         ),
         _quarter(
-            Metric.SHARES_DILUTED_WEIGHTED, date(2022, 4, 1), date(2022, 6, 30), "995", unit="shares"
+            Metric.SHARES_DILUTED_WEIGHTED,
+            date(2022, 4, 1),
+            date(2022, 6, 30),
+            "995",
+            unit="shares",
         ),
         _quarter(
-            Metric.SHARES_DILUTED_WEIGHTED, date(2022, 7, 1), date(2022, 9, 30), "1005", unit="shares"
+            Metric.SHARES_DILUTED_WEIGHTED,
+            date(2022, 7, 1),
+            date(2022, 9, 30),
+            "1005",
+            unit="shares",
         ),
     ]
     assert chain_for(Metric.SHARES_DILUTED_WEIGHTED).subtractable is False

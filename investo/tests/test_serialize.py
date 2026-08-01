@@ -355,7 +355,13 @@ def test_source_indices_are_sorted() -> None:
     _, document = _document()
     sources: Any = document["sources"]
     keys = [
-        (entry["accession"], entry["taxonomy"] or "", entry["tag"] or "", entry["filed"], entry["url"])
+        (
+            entry["accession"],
+            entry["taxonomy"] or "",
+            entry["tag"] or "",
+            entry["filed"],
+            entry["url"],
+        )
         for entry in sources
     ]
     assert keys == sorted(keys)
@@ -552,9 +558,7 @@ def test_a_different_fetch_timestamp_changes_the_bytes() -> None:
         original,
         facts={
             key: tuple(
-                dataclasses.replace(
-                    fact, source=dataclasses.replace(fact.source, fetched_at=later)
-                )
+                dataclasses.replace(fact, source=dataclasses.replace(fact.source, fetched_at=later))
                 for fact in rows
             )
             for key, rows in original.facts.items()

@@ -101,8 +101,7 @@ class Accession:
         accession's own leading digits are the submitter's CIK, not the subject company's.
         """
         return (
-            f"https://www.sec.gov/Archives/edgar/data/{cik}/"
-            f"{self.nodashes}/{self.value}-index.htm"
+            f"https://www.sec.gov/Archives/edgar/data/{cik}/{self.nodashes}/{self.value}-index.htm"
         )
 
 

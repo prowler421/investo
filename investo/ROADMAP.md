@@ -221,30 +221,89 @@ If it runs long, cut M6 scope, not this.
 
 ---
 
-## M3 — Report shell (~1 week)
+## M3 — Report shell (~2.8 weeks, re-estimated)
 
 **Goal:** `investo analyze AAPL` emits a real PDF with real historical charts and no forecast.
 
+Detailed design: [`docs/m3/`](docs/m3/README.md) — the chart set and the single float conversion,
+the renderer's security and determinism settings, the view model, the command's output contract,
+and the test plan. It is subordinate to this file and to DESIGN.md; its **fifteen spec questions**
+are in [`docs/m3/README.md` § 7](docs/m3/README.md#7-spec-questions) and none should be resolved in
+code.
+
+**The ~1 week estimate is superseded.** Re-estimated at **~2.8 weeks part-time** (~14 days), of
+which ~13 days is coding and **1 day is the spike below**. Same shape and roughly the same multiple
+as M1's and M2's re-estimates, which § Rough total already said to expect. Breakdown in
+[`docs/m3/README.md` § Sizing](docs/m3/README.md#9-sizing).
+
+- **The renderer spike runs first**, before any template exists — see § Risks. One day, no green
+  test at the end, and its output is a paragraph in `docs/m3/SPIKE.md` recording what was observed
+  against which versions.
 - `report/charts.py` — matplotlib, **per-chart SVG-or-PNG choice** per DESIGN.md §9.0
-  (revenue + YoY, margin stack, FCF vs. net income, balance sheet, share count)
-- `report/render.py` — Jinja2 (**autoescape on**) → HTML → WeasyPrint ≥69.0 with a
-  deny-by-default `url_fetcher` and presentational hints off
-- Determinism config up front: `SOURCE_DATE_EPOCH`, pinned per-chart `svg.hashsalt`,
-  `metadata={"Date": None}`
+  (revenue + YoY, margins, FCF vs. net income, balance sheet, share count). **PNG for all five
+  until the spike promotes one**, which is what lets the `url_fetcher` deny every URL rather than
+  allow a `file://` path. It is also **the only module in the package permitted a `float`**: every
+  conversion goes through one function, every float literal is a named module-level constant, and
+  the float positions a mark rather than producing a printed figure.
+- **Five charts, not DESIGN §9.1's six.** ROIC vs. WACC needs M5's WACC. And "margin stack" is
+  built as three lines rather than a stacked area, because gross/operating/net margin are nested
+  rather than additive and stacking them plots a total that does not exist.
+- `report/format.py` and `report/model.py` — `Decimal → str` in one place, and a view model whose
+  every leaf is already a string, so **a template cannot do arithmetic on a figure** and the
+  appendix cannot disagree with an axis label
+- `report/render.py` — Jinja2 (**autoescape on**, unconditionally, and `StrictUndefined`) → HTML →
+  WeasyPrint ≥69.0 (`<70`) with a **deny-everything** `url_fetcher` and presentational hints off
+- Determinism config up front: `SOURCE_DATE_EPOCH` derived from `as_of` and restored after,
+  per-chart `svg.hashsalt` through `rc_context`, `metadata={"Date": None}` for SVG **and
+  `{"Software": None}` for PNG**, which §9.0 does not cover and which is the one that bites while
+  every chart is a PNG
+- `analyze.py` — the command body at the package root, writing
+  `out_dir/TICKER/AS_OF/report.{pdf,json}`; **the first command that can exit 3**
 - Sections 1, 3, 4, 9, 10 (cover, snapshot, history, caveats, appendix)
-- Disclaimer on the cover, coverage table in caveats
-- `--brief` variant
+- Disclaimer on the cover, coverage table in caveats, `NOT ASSESSED` in the verdict slot
+- `--brief` variant — selects a template, not a data path
+- Three dependencies: `matplotlib`, `jinja2`, `weasyprint`. **The first that `uv sync` cannot
+  satisfy alone** — WeasyPrint needs Pango and cairo from the platform, so README's Quickstart and
+  the CI workflow both change.
 
 **Exit:** a PDF you'd actually read. Every number traceable to a `SourceRef` in the
 appendix. Two runs produce a byte-identical file.
 
+The third criterion carries a scope caveat that should not be discovered at review: **two runs of
+the same inputs on one machine.** Fonts and FreeType make the cross-machine version false, and it
+is not worth closing for a regression detector — DESIGN §9.0, §11 and a new §12 entry. The first
+criterion is **a judgement, not a test**; that is an accepted risk, mitigated by ordering rather
+than by assertion, and it is the line in the estimate most likely to be wrong.
+
 **Risks:** the matplotlib→WeasyPrint seam (DESIGN.md §9.0) is the largest un-hedged
 implementation risk in the project — clipPath, `<use>` glyph refs, and alpha are all
 long-standing WeasyPrint weak spots and matplotlib emits all three. Build the margin stack
-and a `fill_between` chart **first**, as a spike, before committing to SVG anywhere.
+and a `fill_between` chart **first**, as a spike, before committing to SVG anywhere. The
+`fill_between` half is worth having two milestones early: it decides M5's fan chart.
 
 **Why here:** deliberately before the forecast. A real artifact this early exposes content
 and layout gaps cheaply, and gives the project a usable output long before the model exists.
+
+**Status (2026-08-01): code complete; the spike has not run.** Everything designed in
+[`docs/m3/`](docs/m3/README.md) is built and tested — the five charts with the single-function float
+boundary, the view model, the renderer with its deny-everything `url_fetcher` and restored
+`SOURCE_DATE_EPOCH`, the three templates, `analyze.py` with the output contract and exit 3, four new
+layering rules and five new test modules.
+
+**The renderer spike is this milestone's open research workstream**, and it is the same shape as
+M2's two: no green test declares it finished, and until it runs *"every chart is PNG"* is an interim
+decision rather than a measurement. [`docs/m3/SPIKE.md`](docs/m3/SPIKE.md) is the record and is
+deliberately empty; `tests/spike_renderer.py` is the probe, marked `spike` and deselected by default.
+`ChartFormat` is per-chart so a promotion is one line in a diff that names it — and the promotion
+also converts the unconditional URL deny into a path allowlist, which is the part of the trade that
+would otherwise be discovered afterwards.
+
+Of the three exit criteria: **byte-identity is asserted** (`test_render`, at both renderer and chart
+scope, plus its converse — a renderer writing a constant date would pass the first assertion alone);
+**traceability is asserted** (`test_report_model::test_every_rendered_source_is_in_the_appendix`,
+two independent walks compared as a subset); and *"a PDF you'd actually read"* is a judgement with no
+test, which [`docs/m3/README.md` § 7](docs/m3/README.md#one-risk-accepted-not-resolved) accepts
+rather than pretends to cover.
 
 ---
 
@@ -253,11 +312,11 @@ and layout gaps cheaply, and gives the project a usable output long before the m
 **Goal:** the report gains a genuinely useful analysis section — and becomes worth using
 even with no forecast at all.
 
-- `analyze/fundamentals.py` — growth, margins, ROIC, working-capital ratios
-- `analyze/quality.py` — Piotroski F, Altman Z (variant by SIC), Beneish M
-- `analyze/efficiency.py` — asset/inventory/receivables turnover, cash conversion cycle
-- `analyze/flags.py` — rule registry, one file per rule (DESIGN.md §6.2)
-- `analyze/peers.py` — SIC cohort via frames API, percentile ranks, `--peers` override
+- `analysis/fundamentals.py` — growth, margins, ROIC, working-capital ratios
+- `analysis/quality.py` — Piotroski F, Altman Z (variant by SIC), Beneish M
+- `analysis/efficiency.py` — asset/inventory/receivables turnover, cash conversion cycle
+- `analysis/flags.py` — rule registry, one file per rule (DESIGN.md §6.2)
+- `analysis/peers.py` — SIC cohort via frames API, percentile ranks, `--peers` override
 - Data-integrity flags wired to the confidence rating
 - Sector refusal logic: banks/REITs/pre-revenue get quality + flags, no valuation
 
@@ -276,11 +335,11 @@ depends on a model being right.
 **Goal:** report section 7, "What changed" — the part that catches things a human skims past.
 Added after reviewing a competing spec whose best ideas were all in this area.
 
-- `analyze/events.py` — 8-K item codes → severity. **Item 4.02 (non-reliance on previously
+- `analysis/events.py` — 8-K item codes → severity. **Item 4.02 (non-reliance on previously
   issued financials) is the highest-severity flag in the system**, unconditionally; then 4.01
   auditor change, 2.06 impairment, 3.01 delisting notice, 5.02 officer departure, 1.05 cyber,
   1.03 bankruptcy. Recurring 2.05 restructuring is its own pattern flag.
-- `analyze/diffs.py` — year-over-year Item 1A and MD&A similarity + readable diff, as a
+- `analysis/diffs.py` — year-over-year Item 1A and MD&A similarity + readable diff, as a
   **flag generator, not a return signal** (DESIGN.md §6.7 has the evidence and its limits)
 - Insider transaction summary from Form 4 — filter to open-market P/S codes; grants,
   exercises, tax withholding and 10b5-1 sales are noise
@@ -306,7 +365,7 @@ M0–M4.5 a coherent standalone release.
 
 **Goal:** 1y/2y/5y ranges in the report.
 
-All paths under `analyze/forecast/`.
+All paths under `analysis/forecast/`.
 
 - `trend.py` — **local-level-with-drift** state space (`level='rwdrift'`) on log revenue with
   seasonal terms, giving √h interval scaling; HAC errors; deceleration test gated at ≥20
@@ -323,7 +382,7 @@ All paths under `analyze/forecast/`.
   engine feeding both the fan chart and the valuation quantiles.
 - Fan chart, sensitivity tornado, assumptions table (printing the default exit multiple and
   its peer-cohort provenance)
-- `analyze/score.py` — weighted rubric, band-based valuation sub-score, cut points, separate
+- `analysis/score.py` — weighted rubric, band-based valuation sub-score, cut points, separate
   confidence rating
 - `--assumptions` override file and `--explain` dump
 
@@ -435,14 +494,35 @@ stay at five years.
 
 M0–M5 ≈ **8.5–9.5 weeks part-time** as originally drafted. M6 and M7 add ~2.5 weeks.
 
-**That total is now known to be low, and by how much for the first three milestones.** M1 was
-re-estimated from ~1.5 weeks to ~2.5–3 (and M1b is on top of that); M2 from ~1.5 to ~3.5. Both
-re-estimates were made *after* designing the milestone in detail and *before* building it, and both
-came out at roughly 2.3×. The pattern is not that the work grew — it is that a one-line roadmap
-entry does not price a two-pass resolver, a five-guard derivation, or three days of research with
-no green test attached. Assume the same multiple applies to M3–M5 until a milestone lands that
-disproves it, which would put M0–M5 nearer **15–18 weeks part-time**. The individual estimates are
-updated in place; this total is left as drafted so the gap between the two remains visible.
+**That total is now known to be low, and by how much for the first four milestones.** Each was
+re-estimated *after* designing the milestone in detail and *before* building it:
+
+| Milestone | As drafted | Re-estimated | Multiple |
+|---|---|---|---|
+| M1 (M1a alone; M1b is on top) | ~1.5 wk | ~2.5–3 wk | ~2.0× |
+| M2 | ~1.5 wk | ~3.5 wk | ~2.3× |
+| M3 | ~1 wk | ~2.8 wk | ~2.8× |
+
+The pattern is not that the work grew — it is that a one-line roadmap entry does not price a
+two-pass resolver, a five-guard derivation, a single-function float boundary, or three days of
+research with no green test attached.
+
+**Two things about that trend are worth stating precisely, because it is easy to read more into it
+than it supports.** The multiple is **rising, not settling** — 2.0, 2.3, 2.8 — so "assume ~2.3×"
+was optimistic and the honest planning assumption for M4–M7 is **at least 2.5× and possibly more**.
+At 2.8× flat, M0–M5 is nearer **20–22 weeks part-time** rather than the 15–18 this section
+previously projected, and M6–M7 add ~7 rather than ~2.5.
+
+And the multiple measures **design surface revealed, not velocity**. Every figure in the right-hand
+column is one estimate against another estimate; not one of them is a measurement of elapsed time,
+because elapsed time has not been recorded for any milestone. So the correct reading is "a one-line
+roadmap entry underprices a designed milestone by about 2.5×, and by more as the invariants
+accumulate" — **not** "the project is getting slower." Distinguishing the two matters, because the
+responses are opposite: the first is an estimating correction, and the second would be a reason to
+cut scope. If anyone wants the second claim, someone has to start recording hours.
+
+The individual estimates are updated in place; the drafted total above is left as written so the gap
+between the two remains visible.
 
 Minimum defensible release is **M0–M4.5**: no forecast, but accurate normalized financials,
 quality scores, efficiency trends, red flags, 8-K event detection, filing diffs, ownership
@@ -629,6 +709,103 @@ Raised while reviewing the M2 design (spec questions 13–17 in `docs/m2/README.
   computing the sum outside `normalize/tags.py` would put tag knowledge where the `us-gaap`
   allowlist forbids it.
 
+Decided while designing M3 (all fifteen spec questions in `docs/m3/README.md` §7, folded into
+DESIGN.md):
+
+- **The `analyze` command body is `analyze.py` at the package root; DESIGN §3.1's `analyze/`
+  package is renamed `analysis/`.** A command body must sit at the root — `test_layering` asserts
+  `"/" not in rel` for every module permitted a clock read — and `analyze.py` and `analyze/` are
+  the same import name. The package that does not exist yet is the cheaper one to move. The
+  alternative spellings buy a naming exception every future reader has to be told about.
+- **M3 computes no verdict and no confidence rating, and prints `NOT ASSESSED` rather than a
+  partial one.** Three of the confidence rating's five inputs already exist at M2, which is what
+  makes a partial number dangerous rather than unavailable — it renders on the same 0–100 scale as
+  the real one. The cover prints measured coverage and quarter count instead.
+- **`report/charts.py` is the only module in the package that may construct a `float`.** Every
+  conversion goes through one function (`coord`), asserted by call site rather than by module; every
+  float literal is a named module-level constant. The float positions a mark and never produces a
+  printed figure — every visible number is formatted from the `Decimal`.
+- **Every chart is PNG until the spike promotes one**, and PNG-as-`data:`-URI is what lets the
+  `url_fetcher` deny every URL unconditionally. Promoting a chart to SVG costs that and gains a
+  path allowlist, which is a cost that belongs in the spike's decision.
+- **The template receives pre-formatted strings and may not perform arithmetic**, checked by
+  parsing each template with Jinja's own parser and failing on an arithmetic node. A figure computed
+  in a template has no `Fact` behind it and is invisible to every test that walks the model.
+- **`analyze` exits 3 when `companyfacts` is absent or coverage is below a configured floor, and
+  never because a later milestone's section is missing.** An unbuilt milestone is not insufficient
+  data, and a code that fires on every invocation carries no information. The code is **returned
+  after both files are written**, because §14 promises the report.
+- **`Settings` gains `coverage_floor: Decimal | None`, defaulting to no floor** until
+  `docs/m2/COVERAGE.md` supplies a measured distribution — the same posture as `fail_under`.
+- **`--explain` is recorded in `run.explain` and is otherwise inert at M3**, and **`--brief`
+  selects a template, not a data path**, with `report.json` byte-identical between the two.
+- **`--llm` anything but `none` is exit 5 until M6.** A report that silently drops the section the
+  user asked for is worse than one that refuses.
+- **Byte-identical output is a per-machine, same-inputs claim.** Fonts and FreeType make the
+  cross-machine version false; recorded in DESIGN §9.0, §11 and §12 rather than left as folklore.
+- **Reports are written to `out_dir/TICKER/AS_OF/`**, `report.json` first, both through
+  `os.replace`. Flat output makes the second ticker overwrite the first and destroys the input
+  `investo diff` exists for.
+- **Nothing under `normalize/` or `report/` may import `numpy`**, which arrives transitively with
+  matplotlib two milestones before it is declared and is the `float` ban's back door — a
+  `numpy.float64` is constructed by no `float()` call and contains no float literal.
+- **A chart needs ≥2 points; below that the slot states why**, naming the metric and pointing at
+  the coverage table. A single floating bar reads as a trend and an empty axes reads as a bug.
+- **The templates directory is read from the installed package** via `importlib.resources`, never
+  from a path relative to `__file__` — which would re-open the exact hole the `src/` layout closes.
+- **WeasyPrint is `>=69,<70`.** The ceiling keeps §11's gate meaningful rather than guarding
+  against bugs: a renderer change is what the gate is built to detect.
+- **M3 is re-estimated at ~2.8 weeks part-time**, against ~1 week, with 1 day of it the spike.
+
+Added on review of the built milestone:
+
+- **A milestone design records what it *expects* to touch outside its own tree, and the
+  implementation corrects the list. It does not predict zero.** M2 predicted one file, M3 predicted
+  none and touched three plus eight docstrings; two for two, the prediction was wrong, which is
+  unsurprising once stated — a milestone that adds a layer edits the seam above it and the tests
+  that pin the seam. The table of what moved is the useful artifact; the promise is a claim its own
+  author is the last person positioned to falsify.
+- **A private third-party attribute is depended on only with a named canary test and a degraded
+  path.** `report/render.overflows` reads WeasyPrint's `Page._page_box` because §11 records that
+  overflow detection has no public API. A version ceiling stops the break arriving unannounced; it
+  does not decide what the break costs. So the product degrades and keeps producing a PDF, and one
+  named test fails in the suite. DESIGN §12 carries it as tracked debt rather than a comment.
+- **The estimate multiple is rising (2.0 → 2.3 → 2.8) and it measures design surface, not
+  velocity.** Every figure is one estimate against another; no elapsed time has been recorded for
+  any milestone. Planning assumption for M4–M7 is **≥2.5×**; see § Rough total.
+- **`make check` had never been run before M3, on any milestone.** `pyproject.toml`'s `fail_under`
+  comment says it plainly for M1 — *"the environment this milestone was written in cannot reach
+  PyPI, so httpx and respx are not installed and the suite has not run"* — and the same was true of
+  M2. So "M1 built" and "M2 built" meant *written and reviewed*, not *verified*, and the first real
+  `basedpyright` run landed in M3 with 128 errors, none of them new. Two consequences worth
+  separating: the **status wording** in this file was overclaiming, and the **debt** it hid is
+  M1's, itemised below. Neither is a reason to distrust M1 and M2's design; both are a reason to
+  stop writing "built" for code no gate has seen.
+- **`reportUnknown*` is disabled under `ingest/` and nowhere else.** `json.loads` returns `Any`,
+  every SEC payload is untyped by construction, and pyright propagates the resulting `Unknown`
+  through every `.get()` below it — about a hundred errors across six parsers. **Turning an untyped
+  payload into typed rows is what those parsers are for**: the `Unknown` is their input, and
+  `RawFact`, `FilingRow`, `TickerRow` and `FrameRow` are fully typed on the way out. Same argument
+  the config already makes for `reportAny` and typer, at ten times the scale. Scoped with an
+  execution environment rather than switched off globally, so `domain/`, `normalize/`, `report/` and
+  the command bodies keep the rule.
+  **The alternative is real and is deferred, not dismissed:** a `TypedDict` per payload with
+  validation at the boundary, roughly a day, and **M1's debt to pay rather than M3's.**
+- **A third-party library with no types is suppressed per file, with the reason in the file.**
+  matplotlib types nearly every Artist method `**kwargs: Unknown`; WeasyPrint ships no types at all;
+  `yfinance` is an optional extra that deliberately does not resolve on a default install. Four
+  file-level comments, each naming its cause — and none of them relaxes anything the milestone
+  guarantees, since the float boundary is an AST rule and the traced-point types are ours.
+- **A tool invoked by two different runners must be asserted to be invoked the same way.** The
+  pre-commit hooks claimed since M0 to mirror `make check` and never had: the git root is one level
+  above the Python project, pre-commit runs from the git root, so `ruff check src tests` pointed at
+  nothing and **`basedpyright` silently ran without `pyproject.toml` — in its default mode rather
+  than `strict`, reporting hundreds of diagnostics from rules this project disables.** A linter
+  given a bad path fails loudly; a type checker given no config does not, and its output is
+  indistinguishable from a regression. Fixed with a `cd` guard, and pinned by two tests in
+  `test_documentation.py` rather than by the header comment that had been wrong for three
+  milestones.
+
 ---
 
 ## Open questions
@@ -639,7 +816,10 @@ Ordered by how much the answer changes the build.
 
 1. **Is backtesting (M7) in v1?** If no, every confidence rating and interval in the report
    is unvalidated and must be labeled that way in **report section 9, Caveats** (DESIGN.md
-   §9.1).
+   §9.1). *M3 builds that section, so the label now has a place to go rather than being a
+   commitment with no renderer behind it: caveats block 3 says in terms that no forecast has been
+   made and no accuracy measured, and it is where M7's numbers land. The question is unchanged;
+   what changed is that answering "no" now costs a sentence instead of a section.*
 2. **Peer cohort strategy?** SIC codes are coarse and sometimes plain wrong, and the cohort
    now feeds more than context — it sets the fade target (§5.2) and the default exit
    multiple (§5.7), so cohort quality propagates straight into the valuation. Options: SIC

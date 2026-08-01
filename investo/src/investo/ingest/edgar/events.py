@@ -5,7 +5,7 @@ DESIGN.md §6.6's two-stage design maps cleanly onto the M1/M4.5 split: the code
 which is why §6.6 calls it the highest value per line of code in the system.
 
 **This module has no severity table.** Mapping a code to a severity is M4.5's
-``analyze/events.py``, and that separation is what keeps ingest replaceable. In particular Item 4.02
+``analysis/events.py``, and that separation is what keeps ingest replaceable. In particular Item 4.02
 — non-reliance on previously issued financials, the loudest accounting red flag there is — is
 detected here as a string and ranked there.
 
@@ -44,7 +44,7 @@ amendments would miss a restatement announced as a correction — which is the c
 BODY_REQUIRED_ITEMS: Final = frozenset({"4.01", "5.02"})
 """Items whose code alone does not determine severity, so M4.5 wants the body.
 
-Recorded here rather than in ``analyze/`` because *which* items need a fetch is a property of the
+Recorded here rather than in ``analysis/`` because *which* items need a fetch is a property of the
 extraction plan, while what the body means is analysis. The severity itself lives in M4.5.
 """
 

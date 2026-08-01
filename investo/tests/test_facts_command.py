@@ -233,7 +233,7 @@ def test_observed_spine_is_printed() -> None:
 @respx.mock
 @pytest.mark.spec
 def test_findings_are_printed_in_full_rather_than_counted() -> None:
-    """"3 findings" is a number nobody acts on.
+    """ "3 findings" is a number nobody acts on.
 
     `EXT2` produces a stitch, an exclusivity switch, a summed SG&A and a scope mismatch, so the block
     has to carry several codes and their details. Asserted on codes *and* on a detail fragment, because

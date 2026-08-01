@@ -26,6 +26,19 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # M3. WeasyPrint renders through Pango and cairo, which come from the platform rather than
+      # from PyPI — the first dependency `uv sync` cannot satisfy on its own (DESIGN.md §9.0).
+      #
+      # Installed here rather than marking the render tests opt-in, which would put this
+      # milestone's entire test surface outside the gate. It would not even help:
+      # `test_documentation::test_every_declared_dependency_is_importable` imports every runtime
+      # dependency, so the job fails at that test regardless.
+      - name: Install the WeasyPrint system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b libffi-dev
+
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:

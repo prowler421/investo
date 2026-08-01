@@ -274,8 +274,21 @@ def analyze(
 ) -> None:
     """Generate a due-diligence report for TICKER.
 
-    Writes report.pdf and report.json to the output directory.
+    Writes report.pdf and report.json to ``<out>/TICKER/<as-of>/``. Keyed by ticker *and* as-of
+    date, so a second ticker does not overwrite the first and re-running one point-in-time
+    reconstruction overwrites itself rather than accumulating (DESIGN.md §14).
+
+    **The PDF is historical only at M3** — cover, snapshot, charts, caveats and appendix. There is no
+    forecast, score, peer cohort, event feed or narrative; the verdict badge reads ``NOT ASSESSED``
+    and the caveats section names each absence and the milestone that fills it.
+
+    Exits 3 when the report was written and is thin — no ``companyfacts`` for the CIK, or tier-1
+    coverage below a configured floor. **Not** because a later milestone's section is missing: an
+    unbuilt milestone is not insufficient data, and a code that fired on every run would carry no
+    information.
     """
+    from investo.analyze import render_analyze_summary, require_no_llm, run_analyze
+
     try:
         settings = _settings(
             config_file=config_file,
@@ -285,11 +298,31 @@ def analyze(
             lookback=lookback,
         )
         parse_lookback(settings.lookback)
-        _resolve_as_of(as_of)
-        _split_list(peers, flag="--peers")
+        # Before the fetch, not after it. Both of these are free to check and expensive to discover
+        # forty seconds in, and `--llm` in particular would otherwise produce a complete-looking
+        # report with the section the user asked for silently missing.
+        require_no_llm(settings.llm_provider)
         if assumptions is not None and not assumptions.is_file():
             raise ConfigError(f"--assumptions file not found: {assumptions}")
-        raise NotImplementedYetError.at("M3", f"analyze {ticker}")
+        # The clock is read inside `run_analyze`, once, and nowhere below it — enforced by an AST
+        # rule with an empty allowlist under `normalize/` and `report/`.
+        outcome = run_analyze(
+            ticker,
+            settings=settings,
+            refresh=refresh,
+            as_of=_resolve_as_of(as_of),
+            brief=brief,
+            explain=explain,
+            peers=_split_list(peers, flag="--peers"),
+            assumptions=assumptions,
+            version=_version(),
+        )
+        print(render_analyze_summary(outcome))
+        # Raised from the code on the outcome rather than from inside `run_analyze`, so exit 3's
+        # promise — "insufficient data, *report still written*" — holds by construction: both files
+        # are on disk before this line is reached.
+        if outcome.exit_code is not ExitCode.SUCCESS:
+            raise typer.Exit(int(outcome.exit_code))
     except InvestoError as error:
         raise _fail(error) from error
 
@@ -398,9 +431,7 @@ def cache_prune(
     try:
         settings = _settings(config_file=config_file, cache_dir=cache_dir)
         days = _parse_days(older_than)
-        report = open_cache(settings).prune(
-            older_than=timedelta(days=days), now=datetime.now(UTC)
-        )
+        report = open_cache(settings).prune(older_than=timedelta(days=days), now=datetime.now(UTC))
         # Printed, because a prune that reports nothing is a prune the user runs twice.
         print(
             f"pruned {report.entries_removed} entr{'y' if report.entries_removed == 1 else 'ies'}, "

@@ -15,10 +15,9 @@ classifiers = [
     "Topic :: Office/Business :: Financial :: Investment",
 ]
 
-# Runtime dependencies through M1. The rest arrive with the milestone that imports them —
-# matplotlib / jinja2 / weasyprint in M3, statsmodels / numpy in M5. Declaring them early means
-# every `uv sync` pays for a package nothing imports, and a pin nobody has exercised drifts out
-# of date before its first use.
+# Runtime dependencies through M3. The rest arrive with the milestone that imports them —
+# statsmodels / pandas in M5. Declaring them early means every `uv sync` pays for a package nothing
+# imports, and a pin nobody has exercised drifts out of date before its first use.
 dependencies = [
     "typer>=0.19,<0.20",
     # Pinned even though typer already requires it. typer 0.19 declares `click>=8.0.0` with no
@@ -35,6 +34,25 @@ dependencies = [
     # Form 4 and 13D/G are plain XML and use `xml.etree.ElementTree` from the stdlib, so this is
     # the proxy/document path only.
     "lxml>=5,<7",
+    # M3. The chart API is stable across minors; a major is where the default style changes, and a
+    # default-style change is a byte-identical-output failure (DESIGN.md §11) with no commit of ours
+    # to blame. Brings `numpy` and `pillow` transitively — neither is declared here, because nothing
+    # of ours imports them, and `numpy` is in `tests/test_layering.py`'s forbidden-import set for
+    # `normalize/` and `report/` precisely so it stays that way. A `numpy.float64` is the `float`
+    # ban's back door: constructed by no `float()` call, containing no float literal.
+    "matplotlib>=3.10,<4",
+    # M3. 3.1.6 is the floor because the sandbox-escape fixes through the 3.1.x line matter for a
+    # template engine that will render filing text at M6.
+    "jinja2>=3.1.6,<4",
+    # M3. DESIGN.md §9.0 requires >=69.0: CVE-2025-68616 (SSRF via HTTP redirect, which defeats a
+    # custom `url_fetcher` entirely and is therefore not mitigable in our code), CVE-2026-49452 (CSS
+    # injection via presentational hints), and `use`-tag inheritance fixed in 69.0. The `<70` ceiling
+    # is not caution about bugs — a renderer change is exactly what §11's byte-identical gate is
+    # built to detect, so an open major turns the gate into a source of false alarms.
+    #
+    # This is the first dependency `uv sync` cannot satisfy alone: WeasyPrint renders through Pango
+    # and cairo, which come from the platform. README § Quickstart says so.
+    "weasyprint>=69,<70",
 ]
 
 # yfinance is an *extra*, not a dependency — docs/m1/README.md § Why yfinance is an extra, and
@@ -113,13 +131,48 @@ ignore = [
     "RUF022",
 ]
 
+# RUF001/2/3 flag "ambiguous" Unicode — characters that could be a homoglyph attack. The rule is
+# right in general and wrong for this codebase, which uses typographic characters *deliberately*
+# and in about thirty places: `FY − (Q1+Q2+Q3)` is a minus sign because it is arithmetic notation,
+# `SIC 6000–6499` is an en dash because it is a range, `1.8×` is a multiplication sign.
+#
+# Allowlisting the four characters rather than switching the rules off, because the rules are
+# protecting something real — a Cyrillic `а` in an identifier, a homoglyph in a URL string — and a
+# blanket ignore would give that up to avoid rewriting prose. A new confusable still fails the
+# build, which is the behaviour worth keeping.
+#
+# One of these is not decoration at all. U+2212 is the character `report/format.py` prints on every
+# negative figure — argued in that module and asserted by
+# `test_format::test_a_negative_uses_the_typographic_minus`, because a right-aligned column whose
+# negatives are a hyphen narrower than its positives reads as broken. Replacing it to satisfy a lint
+# would undo a decision that has a test.
+allowed-confusables = [
+    "−",  # U+2212 MINUS SIGN — arithmetic notation, and format.py's printed negative
+    "–",  # U+2013 EN DASH — numeric and date ranges
+    "×",  # U+00D7 MULTIPLICATION SIGN — "2.3× the estimate", "price × shares"
+    "’",  # U+2019 RIGHT SINGLE QUOTATION MARK — the HTML entity documents.py decodes
+]
+
+# U+00A0 is deliberately **not** allowlisted. It appears once, in `ingest/edgar/documents.py`, in
+# the `.replace()` call that strips it — and unlike the four above it is invisible, so an accidental
+# one pasted into a string literal is a bug nobody would see. Allowlisting it repo-wide to permit
+# the one line that removes it would switch off the only detector for the case that actually
+# matters. That line carries a `noqa` instead.
+
 [tool.ruff.lint.per-file-ignores]
 # No B008 exemption for cli.py, deliberately. Typer's older idiom puts a `typer.Option(...)`
 # call in a default argument, which is what B008 exists to catch; cli.py uses the
 # `Annotated[T, typer.Option(...)]` form instead, so the rule stays on everywhere.
 
 # Tests may use assert-heavy patterns and short fixture names.
-"tests/**" = ["N802", "N803", "N806"]
+#
+# SIM300 ("Yoda condition") is off for tests only, and the reason is that it is reading these
+# assertions backwards. Every one it fires on has the shape `assert ALLOWLIST == {a, b, c}` — a
+# pinned constant compared against the set it must hold — and SIM300 sees the literal on the right
+# and asks for `{a, b, c} == ALLOWLIST`, which says the same thing and reads as though the literal
+# were the subject. It is not: the constant is, and these tests exist precisely so that *changing
+# the constant* is a visible edit. Left on for `src/`, where the rule catches what it is for.
+"tests/**" = ["N802", "N803", "N806", "SIM300"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["investo"]
@@ -167,6 +220,32 @@ reportExplicitAny = false
 reportUnusedCallResult = false
 reportUnusedParameter = false
 
+# `reportUnknown*` under `ingest/`, and the reason is the one two paragraphs up, applied to the
+# layer it was always going to bite. **[M3 — and this is the first milestone in which basedpyright
+# has actually run.]**
+#
+# The comment above disables `reportAny` because *"pydantic-settings and typer expose `Any` at their
+# boundaries, and enforcing these means an ignore comment at every call site."* `ingest/` is that
+# same argument at ten times the scale: `json.loads` returns `Any`, every SEC payload is untyped by
+# construction, and pyright propagates the resulting `Unknown` through every subscript and `.get()`
+# below it. **Turning an untyped payload into typed rows is precisely what these parsers are for** —
+# the `Unknown` is their input, not a defect in them, and `RawFact`, `FilingRow`, `TickerRow` and
+# `FrameRow` are all fully typed on the way out. That boundary is where the checking should happen
+# and it does.
+#
+# Scoped to `ingest/` with an execution environment rather than switched off globally, deliberately.
+# These rules earn their place everywhere the types are ours: `normalize/`, `report/`, `domain/` and
+# the commands stay strict, and that is where a genuinely unknown type would mean something.
+#
+# The alternative is real and is not being dismissed: annotate each payload with a `TypedDict` and
+# validate at the boundary. It is worth doing, it is roughly a day, and it is **M1's debt rather
+# than M3's** — recorded in ROADMAP so it is a decision rather than a silence.
+[[tool.basedpyright.executionEnvironments]]
+root = "src/investo/ingest"
+reportUnknownVariableType = false
+reportUnknownMemberType = false
+reportUnknownArgumentType = false
+
 # ---------------------------------------------------------------------------
 # pytest
 # ---------------------------------------------------------------------------
@@ -177,12 +256,17 @@ pythonpath = ["src"]
 # Since CI sets no INVESTO_* variables (CLAUDE.md convention 7), a network test that leaked into
 # the default selection would *fail* rather than quietly pass — which is the behaviour convention 7
 # exists to produce, and the reason the deselection is here rather than in the Makefile.
-addopts = "-q --strict-markers -m 'not network'"
+addopts = "-q --strict-markers -m 'not network and not spike'"
 markers = [
     "spec: asserts a rule stated normatively in DESIGN.md or ROADMAP.md",
     "surface: asserts the CLI's documented flag surface, per README.md § Usage",
     "network: reaches the real internet; deselected by default, needs INVESTO_SEC_USER_AGENT",
     "typing: runs basedpyright over a snippet and asserts the diagnostic",
+    # M3. `tests/spike_renderer.py` writes files and prints rather than asserting — its output is a
+    # decision, recorded in docs/m3/SPIKE.md, not a pass/fail. Deselected for the same reason
+    # `network` is: a run that is not a test should not be able to fail the build, and should not
+    # cost anyone ten seconds on every `make test`.
+    "spike: writes artifacts and prints findings; run by a person, deselected by default",
 ]
 
 # ---------------------------------------------------------------------------

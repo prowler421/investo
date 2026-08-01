@@ -119,7 +119,7 @@ def test_empty_string_scalars_become_none(arxs_submissions: bytes) -> None:
     assert columns["act"][effect_index] == ""
     assert as_optional_str(columns["act"][effect_index]) is None
 
-    assert profile.name == "Arxis, Inc.", "the parse survived every `\"\"` in the payload"
+    assert profile.name == "Arxis, Inc.", 'the parse survived every `""` in the payload'
 
 
 @pytest.mark.spec

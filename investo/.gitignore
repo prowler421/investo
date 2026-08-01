@@ -92,3 +92,6 @@ reports/
 # committed on someone else's behalf.
 investo.toml
 !tests/**/investo.toml
+
+# The renderer spike (docs/m3/SPIKE.md) writes here when run outside a tmp_path.
+spike-output/

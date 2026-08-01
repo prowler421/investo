@@ -45,10 +45,16 @@ TIMEOUT_SECONDS: Final = 300.0
 
 EXPECTED_FIXTURES: Final = (
     "accession_cik_attribute.py",
+    "chart_from_bare_numbers.py",
     "cover_shares_as_diluted.py",
     "framerow_as_rawfact.py",
 )
-"""The three violations §5 names. Pinned so a deleted fixture fails rather than a shrinking run."""
+"""The violations §5 names, plus M3's. Pinned so a deleted fixture fails rather than a shrinking run.
+
+``chart_from_bare_numbers.py`` is CLAUDE.md convention 16, and it belongs here for the same reason
+the other three do: the guarantee is a signature rather than a check, so the attempt does not
+compile and there is nothing to assert at runtime.
+"""
 
 
 def _command() -> list[str]:

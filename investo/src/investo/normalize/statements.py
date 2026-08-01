@@ -119,7 +119,7 @@ FINDING_CODES: Final = (
 
 Declared as a tuple so ``test_findings`` can assert one test per code exists rather than trusting
 that the suite happens to cover them. **No severity attaches to any of them** — §6.2 gives severity
-to ``analyze/flags.py``'s registry, one rule per file with its own test, and a severity assigned in
+to ``analysis/flags.py``'s registry, one rule per file with its own test, and a severity assigned in
 ``normalize/`` is a severity assigned twice. The two copies diverge on the first rule M4 tunes.
 """
 
@@ -583,16 +583,14 @@ def build_history(
         fiscal_year_end=profile.fiscal_year_end if profile is not None else None,
         sic=profile.sic if profile is not None else None,
         sic_description=profile.sic_description if profile is not None else None,
-        annual={metric: facts_ for metric, facts_ in annual.items()},
-        quarterly={metric: facts_ for metric, facts_ in quarterly.items()},
+        annual=dict(annual),
+        quarterly=dict(quarterly),
         coverage=report,
         as_of=as_of if as_of is not None else window[1],
         window=window,
         quarters_available=_quarters_available(quarterly),
         restatements=tuple(
-            record
-            for metric in sorted(series, key=str)
-            for record in series[metric].restatements
+            record for metric in sorted(series, key=str) for record in series[metric].restatements
         ),
         market_cap=market_cap,
     )
@@ -638,14 +636,19 @@ def _apply_derivations(
             if not candidates:
                 continue
             resolved = {
-                metric: {(fact.period.end, fact.period.kind): fact for fact in store.get(metric, ())}
+                metric: {
+                    (fact.period.end, fact.period.kind): fact for fact in store.get(metric, ())
+                }
                 for metric in spec.metric_inputs
             }
             produced = derive(spec, resolved=resolved, raw=raw, periods=candidates)
             if not produced:
                 continue
             store[spec.metric] = tuple(
-                sorted((*store.get(spec.metric, ()), *(fact for fact, _ in produced)), key=fact_sort_key)
+                sorted(
+                    (*store.get(spec.metric, ()), *(fact for fact, _ in produced)),
+                    key=fact_sort_key,
+                )
             )
             counts[(spec.metric, bucket)] = len(produced)
             if any(flag for _, flag in produced) and spec.metric not in approximated:
@@ -701,7 +704,9 @@ def _candidate_periods(
         for metric in spec.metric_inputs:
             for fact in store.get(metric, ()):
                 unique.setdefault((fact.period.end, fact.period.kind), fact.period)
-        return tuple(unique[key] for key in sorted(unique, key=lambda pair: (pair[0], str(pair[1]))))
+        return tuple(
+            unique[key] for key in sorted(unique, key=lambda pair: (pair[0], str(pair[1])))
+        )
 
     chain = chain_for(spec.metric)
     if chain.aggregation is not Aggregation.INSTANT:
@@ -877,7 +882,10 @@ def _metric_findings(
     annual_coverage, quarterly_coverage = coverage
 
     if coverage_floor is not None:
-        for bucket, entry in ((Bucket.ANNUAL, annual_coverage), (Bucket.QUARTERLY, quarterly_coverage)):
+        for bucket, entry in (
+            (Bucket.ANNUAL, annual_coverage),
+            (Bucket.QUARTERLY, quarterly_coverage),
+        ):
             rate = entry.fill_rate
             if rate is not None and rate < coverage_floor:
                 found.append(

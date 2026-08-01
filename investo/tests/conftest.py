@@ -199,7 +199,9 @@ def company_facts(name: str, *, cik: int | None = None) -> CompanyFacts:
     return parse_companyfacts(fixture_bytes("edgar", "companyfacts", name), source=context(cik=cik))
 
 
-def submissions(name: str, *, cik: int | None = None) -> tuple[CompanyProfile, tuple[FilingRow, ...]]:
+def submissions(
+    name: str, *, cik: int | None = None
+) -> tuple[CompanyProfile, tuple[FilingRow, ...]]:
     """Parse a `submissions` fixture, returning the profile and `filings.recent`."""
     profile, recent, _ = parse_submissions(
         fixture_bytes("edgar", "submissions", name), source=context(cik=cik)
